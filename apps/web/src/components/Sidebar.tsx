@@ -256,6 +256,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarCovenSection } from "./coven/SidebarCovenSection";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import {
@@ -3722,6 +3723,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
+      {routeTarget?.kind === "server" ? (
+        <SidebarCovenSection
+          environmentId={routeTarget.threadRef.environmentId}
+          threadId={routeTarget.threadRef.threadId}
+        />
+      ) : null}
       <SidebarChromeFooter />
     </SidebarFolderDrop>
   );

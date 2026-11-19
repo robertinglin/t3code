@@ -275,6 +275,18 @@
       "types": "./src/threadPullRequests.ts",
       "import": "./src/threadPullRequests.ts"
     },
+    "./covenDefinition": {
+      "types": "./src/covenDefinition.ts",
+      "import": "./src/covenDefinition.ts"
+    },
+    "./covenCommands": {
+      "types": "./src/covenCommands.ts",
+      "import": "./src/covenCommands.ts"
+    },
+    "./covenRuntime": {
+      "types": "./src/covenRuntime.ts",
+      "import": "./src/covenRuntime.ts"
+    },
     "./composerTrigger": {
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"
@@ -638,6 +650,10 @@
     "./paletteSearchCopy": {
       "types": "./src/paletteSearchCopy.ts",
       "import": "./src/paletteSearchCopy.ts"
+    },
+    "./covenMerge": {
+      "types": "./src/covenMerge.ts",
+      "import": "./src/covenMerge.ts"
     }
   },
   "scripts": {

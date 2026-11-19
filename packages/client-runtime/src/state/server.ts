@@ -1576,6 +1576,18 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,
     }),
+    covensLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:covens:live",
+      tag: WS_METHODS.covensSubscribeList,
+    }),
+    threadCovenLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:covens:thread",
+      tag: WS_METHODS.covensSubscribeThread,
+    }),
+    covenDraftLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:covens:draft",
+      tag: WS_METHODS.covensSubscribeDraft,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan. With
     // nothing to show yet, the server's last scan answers first, then a plain
@@ -1837,6 +1849,58 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    loadCoven: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:load",
+      tag: WS_METHODS.covensGet,
+    }),
+    saveCoven: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:save",
+      tag: WS_METHODS.covensSave,
+    }),
+    archiveCoven: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:archive",
+      tag: WS_METHODS.covensArchive,
+    }),
+    setThreadCoven: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:set-thread",
+      tag: WS_METHODS.covensSetThread,
+    }),
+    clearThreadCoven: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:clear-thread",
+      tag: WS_METHODS.covensClearThread,
+    }),
+    loadCovenRevision: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:get-revision",
+      tag: WS_METHODS.covensGetRevision,
+    }),
+    controlCovenRun: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:control-run",
+      tag: WS_METHODS.covensControlRun,
+    }),
+    decideCoven: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:decide",
+      tag: WS_METHODS.covensDecide,
+    }),
+    clearCovenCooldown: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:clear-cooldown",
+      tag: WS_METHODS.covensClearCooldown,
+    }),
+    startCovenBuilder: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:start-builder",
+      tag: WS_METHODS.covensStartBuilder,
+    }),
+    loadCovenDraftForThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:draft-for-thread",
+      tag: WS_METHODS.covensDraftForThread,
+    }),
+    updateCovenDraft: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:update-draft",
+      tag: WS_METHODS.covensUpdateDraft,
+    }),
+    saveCovenDraft: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:covens:save-draft",
+      tag: WS_METHODS.covensSaveDraft,
     }),
     upsertScheduledTask: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:upsert",

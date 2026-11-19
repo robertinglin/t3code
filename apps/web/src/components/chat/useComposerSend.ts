@@ -244,6 +244,8 @@ interface ComposerSendInput {
   readonly usageLimitsKey: string | null;
   readonly usageLimitsOffered: boolean;
   readonly openUsageLimits: UsageLimitsPanel["open"];
+  /** Runs an app-owned `/coven` command; false leaves the text to send normally. */
+  readonly runCovenCommand: (text: string) => boolean;
   readonly clearUsageLimitsFor: UsageLimitsPanel["clearFor"];
   readonly needsLoadBalancing: boolean;
   readonly loadBalancing: DraftEnvironmentRouting["loadBalancing"];
@@ -341,6 +343,7 @@ export function useComposerSend(input: ComposerSendInput) {
     usageLimitsKey,
     usageLimitsOffered,
     openUsageLimits,
+    runCovenCommand,
     clearUsageLimitsFor,
     needsLoadBalancing,
     loadBalancing,
@@ -432,6 +435,17 @@ export function useComposerSend(input: ComposerSendInput) {
         setComposerDraftPrompt(composerDraftTarget, "");
         composerRef.current?.resetCursorState();
       }
+      return;
+    }
+
+    if (
+      !directAnnotation &&
+      !draftHasNonPromptContent(composerDraftTarget) &&
+      runCovenCommand(promptAtSend)
+    ) {
+      promptRef.current = "";
+      setComposerDraftPrompt(composerDraftTarget, "");
+      composerRef.current?.resetCursorState();
       return;
     }
 

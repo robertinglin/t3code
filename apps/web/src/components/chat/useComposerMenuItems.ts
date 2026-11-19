@@ -259,6 +259,20 @@ export function useComposerMenuItems({
           label: "/model",
           description: gt("Switch response model for this thread"),
         },
+        {
+          id: "slash:coven",
+          type: "slash-command",
+          command: "coven",
+          label: "/coven",
+          description: "Pick, run, approve or stop this thread's coven",
+        },
+        {
+          id: "slash:coven-build",
+          type: "slash-command",
+          command: "coven-build",
+          label: "/coven-build",
+          description: "Build a coven of agents with AI",
+        },
         ...(sideChatAvailable
           ? ([
               {

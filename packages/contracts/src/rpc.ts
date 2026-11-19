@@ -395,6 +395,32 @@ import {
   TextGeneratorError,
 } from "./settings.ts";
 import {
+  CovenArchiveInput,
+  CovenArchiveResult,
+  CovenDetail,
+  CovenError,
+  CovenGetInput,
+  CovenListInput,
+  CovenListResult,
+  CovenSaveInput,
+  ThreadCovenInput,
+  ThreadCovenSetInput,
+  ThreadCovenState,
+  CovenClearCooldownInput,
+  CovenDecideInput,
+  CovenDraft,
+  CovenDraftByThreadInput,
+  CovenDraftInput,
+  CovenDraftUpdate,
+  CovenGetRevisionInput,
+  CovenRevision,
+  CovenRunControlInput,
+  CovenSaveDraftInput,
+  CovenStartBuilderInput,
+  CovenStartBuilderResult,
+  CovenUpdateDraftInput,
+} from "./coven.ts";
+import {
   ScheduledTaskDeleteInput,
   ScheduledTaskDeleteResult,
   ScheduledTaskError,
@@ -577,6 +603,23 @@ export const WS_METHODS = {
   serverReportClientActivity: "server.reportClientActivity",
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
+
+  covensSubscribeList: "covens.subscribeList",
+  covensGet: "covens.get",
+  covensSave: "covens.save",
+  covensArchive: "covens.archive",
+  covensSubscribeThread: "covens.subscribeThread",
+  covensSetThread: "covens.setThread",
+  covensClearThread: "covens.clearThread",
+  covensGetRevision: "covens.getRevision",
+  covensControlRun: "covens.controlRun",
+  covensDecide: "covens.decide",
+  covensClearCooldown: "covens.clearCooldown",
+  covensStartBuilder: "covens.startBuilder",
+  covensSubscribeDraft: "covens.subscribeDraft",
+  covensDraftForThread: "covens.draftForThread",
+  covensUpdateDraft: "covens.updateDraft",
+  covensSaveDraft: "covens.saveDraft",
 
   scheduledTasksSubscribe: "scheduledTasks.subscribe",
   scheduledTasksUpsert: "scheduledTasks.upsert",
@@ -2166,6 +2209,107 @@ const WsSubscribeServerLifecycleRpc = Rpc.make(WS_METHODS.subscribeServerLifecyc
   stream: true,
 });
 
+const covenErrors = Schema.Union([CovenError, EnvironmentAuthorizationError]);
+
+const WsCovensSubscribeListRpc = Rpc.make(WS_METHODS.covensSubscribeList, {
+  payload: CovenListInput,
+  success: CovenListResult,
+  error: covenErrors,
+  stream: true,
+});
+
+const WsCovensGetRpc = Rpc.make(WS_METHODS.covensGet, {
+  payload: CovenGetInput,
+  success: CovenDetail,
+  error: covenErrors,
+});
+
+const WsCovensSaveRpc = Rpc.make(WS_METHODS.covensSave, {
+  payload: CovenSaveInput,
+  success: CovenDetail,
+  error: covenErrors,
+});
+
+const WsCovensArchiveRpc = Rpc.make(WS_METHODS.covensArchive, {
+  payload: CovenArchiveInput,
+  success: CovenArchiveResult,
+  error: covenErrors,
+});
+
+const WsCovensSubscribeThreadRpc = Rpc.make(WS_METHODS.covensSubscribeThread, {
+  payload: ThreadCovenInput,
+  success: ThreadCovenState,
+  error: covenErrors,
+  stream: true,
+});
+
+const WsCovensSetThreadRpc = Rpc.make(WS_METHODS.covensSetThread, {
+  payload: ThreadCovenSetInput,
+  success: ThreadCovenState,
+  error: covenErrors,
+});
+
+const WsCovensClearThreadRpc = Rpc.make(WS_METHODS.covensClearThread, {
+  payload: ThreadCovenInput,
+  success: ThreadCovenState,
+  error: covenErrors,
+});
+
+const WsCovensGetRevisionRpc = Rpc.make(WS_METHODS.covensGetRevision, {
+  payload: CovenGetRevisionInput,
+  success: CovenRevision,
+  error: covenErrors,
+});
+
+const WsCovensControlRunRpc = Rpc.make(WS_METHODS.covensControlRun, {
+  payload: CovenRunControlInput,
+  success: ThreadCovenState,
+  error: covenErrors,
+});
+
+const WsCovensDecideRpc = Rpc.make(WS_METHODS.covensDecide, {
+  payload: CovenDecideInput,
+  success: ThreadCovenState,
+  error: covenErrors,
+});
+
+const WsCovensClearCooldownRpc = Rpc.make(WS_METHODS.covensClearCooldown, {
+  payload: CovenClearCooldownInput,
+  success: Schema.Struct({}),
+  error: covenErrors,
+});
+
+const WsCovensStartBuilderRpc = Rpc.make(WS_METHODS.covensStartBuilder, {
+  payload: CovenStartBuilderInput,
+  success: CovenStartBuilderResult,
+  error: covenErrors,
+});
+
+const WsCovensSubscribeDraftRpc = Rpc.make(WS_METHODS.covensSubscribeDraft, {
+  payload: CovenDraftInput,
+  success: CovenDraftUpdate,
+  error: covenErrors,
+  stream: true,
+});
+
+const WsCovensDraftForThreadRpc = Rpc.make(WS_METHODS.covensDraftForThread, {
+  payload: CovenDraftByThreadInput,
+  success: CovenDraftUpdate,
+  error: covenErrors,
+});
+
+const WsCovensUpdateDraftRpc = Rpc.make(WS_METHODS.covensUpdateDraft, {
+  payload: CovenUpdateDraftInput,
+  success: CovenDraft,
+  error: covenErrors,
+});
+
+const WsCovensSaveDraftRpc = Rpc.make(WS_METHODS.covensSaveDraft, {
+  payload: CovenSaveDraftInput,
+  success: CovenDetail,
+  error: covenErrors,
+});
+
 const WsScheduledTasksSubscribeRpc = Rpc.make(WS_METHODS.scheduledTasksSubscribe, {
   payload: ScheduledTaskListInput,
   success: ScheduledTaskListResult,
@@ -2330,6 +2474,22 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
+  WsCovensSubscribeListRpc,
+  WsCovensGetRpc,
+  WsCovensSaveRpc,
+  WsCovensArchiveRpc,
+  WsCovensSubscribeThreadRpc,
+  WsCovensSetThreadRpc,
+  WsCovensClearThreadRpc,
+  WsCovensGetRevisionRpc,
+  WsCovensControlRunRpc,
+  WsCovensDecideRpc,
+  WsCovensClearCooldownRpc,
+  WsCovensStartBuilderRpc,
+  WsCovensSubscribeDraftRpc,
+  WsCovensDraftForThreadRpc,
+  WsCovensUpdateDraftRpc,
+  WsCovensSaveDraftRpc,
   WsScheduledTasksSubscribeRpc,
   WsScheduledTasksUpsertRpc,
   WsScheduledTasksSetEnabledRpc,

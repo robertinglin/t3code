@@ -33,6 +33,8 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../config.ts";
+import * as CovenService from "../coven/CovenService.ts";
+import { covenLeaderNote } from "../coven/covenWorkerTask.ts";
 import {
   CLAUDE_PROVIDER,
   CLAUDE_QUERY_ENDED_BEFORE_TURN_DETAIL,
@@ -273,6 +275,8 @@ export const layer: Layer.Layer<
   Effect.gen(function* () {
     const eventSink = yield* EventSink.EventSinkV2;
     const turnAnalytics = yield* ProviderUsageAnalytics.ProviderTurnAnalytics;
+    // Optional so hosts and tests built without coven storage start turns unchanged.
+    const covens = yield* Effect.serviceOption(CovenService.CovenService);
     const contextHandoffService = yield* ContextHandoffService.ContextHandoffServiceV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -1026,6 +1030,19 @@ export const layer: Layer.Layer<
         restartCancelledWork.length === 0
           ? ""
           : restartCancelledBackgroundWorkNote(restartCancelledWork);
+      const covenScope = Option.isNone(covens)
+        ? null
+        : yield* covens.value
+            .threadScope(projection.thread.id)
+            .pipe(Effect.orElseSucceed(() => null));
+      const covenRun =
+        covenScope?.kind === "leader" && Option.isSome(covens)
+          ? yield* covens.value
+              .ensureRun(projection.thread.id)
+              .pipe(Effect.orElseSucceed(() => null))
+          : null;
+      const covenNote =
+        covenScope?.kind === "leader" ? covenLeaderNote({ ...covenScope, run: covenRun }) : "";
       const tokenCap = yield* handoffTokenCapConfig.pipe(
         Effect.orElseSucceed(() => DEFAULT_HANDOFF_TOKEN_CAP),
       );
@@ -1992,7 +2009,7 @@ export const layer: Layer.Layer<
             sideChatHandoff === undefined || compact || goalCommand
               ? ""
               : sideChatHandoff.summaryText;
-          const context = [delivery.context, sideChatContext, restartNote]
+          const context = [delivery.context, sideChatContext, restartNote, covenNote]
             .filter((part) => part !== "")
             .join("\n\n");
           const { restartContinuationOfRunId: _resumedRunId, ...promptedInput } = turnInput;
@@ -2087,6 +2104,7 @@ export const layer: Layer.Layer<
         retryHandoff.attachments.length === 0 &&
         sideChatHandoff === undefined &&
         restartNote === "" &&
+        covenNote === "" &&
         !noteContinuation
           ? session
           : makeDeliverySession(session, startWithHandoffs);

@@ -94,7 +94,9 @@ import {
 } from "./toolkits/device/tools.ts";
 import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { MessageToolkit } from "./toolkits/message/tools.ts";
+import { CovenToolkit } from "./toolkits/coven/tools.ts";
 import * as MessageHandlers from "./toolkits/message/handlers.ts";
+import * as CovenHandlers from "./toolkits/coven/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
 import { MCP_HTTP_PATH } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
@@ -1325,9 +1327,9 @@ export const layerPreviewToolkit = Layer.mergeAll(
   layerPreviewSnapshotRegistration,
 );
 
-export const layerOrchestratorToolkit = toolkitRegistration(
-  OrchestratorToolkit,
-  OrchestratorHandlers.layer,
+export const layerOrchestratorToolkit = Layer.merge(
+  toolkitRegistration(OrchestratorToolkit, OrchestratorHandlers.layer),
+  toolkitRegistration(CovenToolkit, CovenHandlers.layer),
 ).pipe(Layer.provide(OrchestratorMcpService.layer), Layer.provide(ThreadMetadataMcpService.layer));
 
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);

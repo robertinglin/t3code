@@ -35,6 +35,7 @@ import { useTimelineRewind } from "./chat/useTimelineRewind";
 import { useThreadLifecycle } from "./chat/useThreadLifecycle";
 import { useRightPanelActions } from "./chat/useRightPanelActions";
 import { type TerminalLaunchContext, useChatTerminalActions } from "./chat/useChatTerminalActions";
+import { useCovenCommand } from "./coven/useCovenCommand";
 import { useComposerSend } from "./chat/useComposerSend";
 import { useComposerResume } from "./chat/useComposerResume";
 import { ThreadFind, ThreadFindCanvas } from "./chat/ThreadFindProvider";
@@ -2985,6 +2986,11 @@ export default function ChatView(props: ChatViewProps) {
     scrollToEnd,
     setThreadError,
   });
+  const runCovenCommand = useCovenCommand({
+    environmentId,
+    threadId: routeKind === "server" ? threadId : null,
+    currentModel: () => composerRef.current?.getSendContext().selectedModelSelection,
+  });
   const { onSend } = useComposerSend({
     environmentId,
     routeThreadKey,
@@ -3030,6 +3036,7 @@ export default function ChatView(props: ChatViewProps) {
     usageLimitsKey,
     usageLimitsOffered,
     openUsageLimits,
+    runCovenCommand,
     clearUsageLimitsFor,
     needsLoadBalancing,
     loadBalancing,

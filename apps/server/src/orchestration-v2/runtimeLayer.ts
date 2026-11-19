@@ -58,6 +58,8 @@ import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
+import * as CovenControlService from "../coven/CovenControlService.ts";
+import * as CovenService from "../coven/CovenService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 
@@ -418,12 +420,18 @@ export const layerProduction = Layer.mergeAll(
     ),
   ),
   layerProviderContinuationWorkerProvided,
+  // The coven run engine: pause/resume/stop, model fallback, gates and run docs.
+  CovenControlService.layer.pipe(
+    Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerThreadLaunchProvided)),
+  ),
   layerAgentSessionScannerProvided,
   layerAgentSessionImporterProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
 ).pipe(
   Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),
   Layer.provideMerge(layerProjectService),
+  // Turn starts read the thread's coven to tell its leader about the team.
+  Layer.provideMerge(CovenService.layer),
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(layerEventInfrastructure),
 );

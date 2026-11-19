@@ -6,6 +6,7 @@ import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import * as PeerLinkRequests from "../../../peer/PeerLinkRequests.ts";
 import * as PeerLinks from "../../../peer/PeerLinks.ts";
 import * as RemoteDelegation from "../../../peer/RemoteDelegation.ts";
+import { covenGuard } from "../../../coven/covenMcpPolicy.ts";
 import { readCaller } from "../../threadAccess.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -23,6 +24,8 @@ const handlers = {
   delegate_task: McpToolAccess.actsAsCaller((input) =>
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;
+      const refuseInCovenThread = yield* covenGuard;
+      yield* refuseInCovenThread("delegate_task");
       const service = yield* OrchestratorMcpService.OrchestratorMcpService;
       return yield* service.delegateTask(scope, input);
     }),
@@ -147,6 +150,8 @@ const handlers = {
   create_threads: McpToolAccess.actsAsCaller((input) =>
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;
+      const refuseInCovenThread = yield* covenGuard;
+      yield* refuseInCovenThread("create_threads");
       const service = yield* OrchestratorMcpService.OrchestratorMcpService;
       return yield* service.createThreads(scope, input);
     }),
@@ -180,6 +185,8 @@ const handlers = {
       (input) =>
         Effect.gen(function* () {
           const scope = yield* McpInvocationContext.McpInvocationContext;
+          const refuseInCovenThread = yield* covenGuard;
+          yield* refuseInCovenThread("t3_thread_send");
           const service = yield* OrchestratorMcpService.OrchestratorMcpService;
           return yield* service.sendToThread(scope, input);
         }),
