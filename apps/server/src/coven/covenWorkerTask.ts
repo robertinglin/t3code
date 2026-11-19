@@ -61,16 +61,22 @@ export function covenLeaderNote(input: {
       );
     } else if (status === "awaiting_gate") {
       lines.push(`The run is waiting on a gate: ${run.state.statusReason ?? ""}`);
-    } else if (status === "running" && run.state.plan === null) {
-      lines.push("Record your plan with coven_propose_plan before or while you delegate.");
+    }
+    if (run.state.summary !== null && status === "running") {
+      lines.push(
+        `The coven already finished earlier work on this thread (last: ${run.state.summary}). This is the same coven continuing, not a new run: don't re-plan from scratch; pick up the user's new request with the same team.`,
+      );
     }
   }
   if (gates.length > 0) {
     lines.push(
-      `Gates: ${gates.join("; ")}. Open one with coven_request_gate; finish with coven_complete_run, which checks the completion gates.`,
+      `Gates: ${gates.join("; ")}. Open one with coven_request_gate; when a piece of work is done, call coven_complete_run, which checks the completion gates.`,
     );
   } else {
-    lines.push("When the work is done, call coven_complete_run with a summary.");
+    lines.push("When a piece of work is done, call coven_complete_run with a summary.");
   }
+  lines.push(
+    "The coven stays with this thread until the user switches covens. Completing work doesn't disband it.",
+  );
   return lines.join(" ");
 }

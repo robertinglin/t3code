@@ -692,7 +692,7 @@ const make = Effect.gen(function* () {
     if (active !== null) {
       return yield* new CovenError({
         reason: "policy-denied",
-        message: `A coven run is in progress. Stop it or let it finish before you ${action}.`,
+        message: `This thread's coven is still working. End its work before you ${action}.`,
       });
     }
   });
@@ -709,6 +709,9 @@ const make = Effect.gen(function* () {
           message: "This thread is a coven worker; change the coven from its leader thread.",
         });
       }
+      const current = yield* activeRunFor(threadId);
+      // Re-picking the coven that's already working here keeps it as is.
+      if (current !== null && current.covenId === covenId) return yield* threadState(threadId);
       yield* refuseWhileRunning(threadId, "change the coven");
       const now = yield* nowIso;
       yield* sql`

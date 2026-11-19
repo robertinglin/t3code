@@ -46,6 +46,7 @@ import {
   ChevronRight,
   FileDiff,
   Files,
+  UsersRound,
   Globe2,
   MessagesSquare,
   Plus,
@@ -161,6 +162,10 @@ export interface RightPanelTabsProps {
   sideChatAvailable?: boolean;
   /** Overrides the default reason while side chats are available but cannot start. */
   sideChatDisabledReason?: string | null;
+  /** Absent where covens are not offered. */
+  onAddCoven?: (() => void) | undefined;
+  /** The bound coven's name, shown as the coven tab's title. */
+  covenTitle?: string | null;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   children: ReactNode;
 }
@@ -344,6 +349,7 @@ function RightPanelEmptyState(props: {
   deviceAvailable: boolean;
   sideChatAvailable: boolean;
   sideChatDisabledReason: string | null;
+  onAddCoven?: (() => void) | undefined;
 }) {
   const gt = useGT();
   const messages = useMessages();
@@ -418,6 +424,19 @@ function RightPanelEmptyState(props: {
             disabledReason:
               props.sideChatDisabledReason ?? messages(SURFACE_UNAVAILABLE_HINTS.sideChat),
             onClick: props.onAddSideChat,
+          },
+        ]
+      : []),
+    ...(props.onAddCoven
+      ? [
+          {
+            label: "Coven",
+            description: "Meet the agent team working on this thread.",
+            icon: UsersRound,
+            shortcut: "C",
+            available: true,
+            disabledReason: "",
+            onClick: props.onAddCoven,
           },
         ]
       : []),
@@ -614,6 +633,8 @@ function surfaceTitle(
       return surface.title ?? surface.target?.name ?? resolve(msg("Device"));
     case "side-chat":
       return resolve(msg("Side chat"));
+    case "coven":
+      return "Coven";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return resolve(msg("Browser"));
@@ -706,6 +727,8 @@ function SurfaceIcon({
       return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
+    case "coven":
+      return <UsersRound className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -1238,6 +1261,18 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           },
         ]
       : []),
+    ...(props.onAddCoven
+      ? [
+          {
+            label: "Coven",
+            icon: UsersRound,
+            shortcut: "C",
+            available: true,
+            disabledReason: "",
+            onClick: props.onAddCoven,
+          },
+        ]
+      : []),
   ] as const;
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -1465,12 +1500,16 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     dragDisabled={!props.onMoveSurface || renamingDevice === surface.id}
                     active={surface.id === props.activeSurfaceId}
                     pending={props.pendingSurfaceIds.has(surface.id)}
-                    title={surfaceTitle(
-                      surface,
-                      props.previewSessions,
-                      props.terminalLabelsById,
-                      messages,
-                    )}
+                    title={
+                      surface.kind === "coven" && props.covenTitle
+                        ? props.covenTitle
+                        : surfaceTitle(
+                            surface,
+                            props.previewSessions,
+                            props.terminalLabelsById,
+                            messages,
+                          )
+                    }
                     audio={tabAudioState(
                       previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
                     )}
@@ -1643,6 +1682,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
             onAddSideChat={props.onAddSideChat}
+            onAddCoven={props.onAddCoven}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}

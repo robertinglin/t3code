@@ -105,6 +105,7 @@ export class CovenControlService extends Context.Service<
       threadId: ThreadId,
       covenId: string,
     ) => Effect.Effect<ThreadCovenState, CovenError>;
+    readonly clearThread: (threadId: ThreadId) => Effect.Effect<ThreadCovenState, CovenError>;
     readonly controlRun: (
       threadId: ThreadId,
       action: "pause" | "resume" | "stop",
@@ -276,6 +277,7 @@ const make = Effect.gen(function* () {
 
   const setThread: CovenControlService["Service"]["setThread"] = Effect.fn("setThread")(
     function* (threadId, covenId) {
+      yield* endRunForSwitch(threadId, covenId);
       const state = yield* covens.setThread(threadId, covenId);
       if (state.binding === null) return state;
       const definition = yield* covens.definitionAt(state.binding.covenId, state.binding.revision);
@@ -285,6 +287,32 @@ const make = Effect.gen(function* () {
       const index = pickCovenCandidate(candidates, 0, yield* covens.cooldowns, now) ?? 0;
       yield* switchThreadModel(threadId, candidates[index]!);
       return state;
+    },
+  );
+
+  /** Switching covens (or turning the coven off) is the only thing that ends a coven's run. */
+  const endRunForSwitch = Effect.fn("endRunForSwitch")(function* (
+    threadId: ThreadId,
+    nextCovenId: string | null,
+  ) {
+    const scope = yield* covens.threadScope(threadId);
+    if (scope === null || scope.kind !== "leader" || scope.run === null) return;
+    if (!isRunActive(scope.run.state.status) || scope.run.covenId === nextCovenId) return;
+    yield* haltRun(scope.run, {
+      end: true,
+      reason: nextCovenId === null ? "You turned the coven off." : "You switched covens.",
+      eventKind: "run.ended",
+      eventSummary:
+        nextCovenId === null
+          ? `You turned off ${scope.binding.name}.`
+          : `You switched away from ${scope.binding.name}.`,
+    });
+  });
+
+  const clearThread: CovenControlService["Service"]["clearThread"] = Effect.fn("clearThread")(
+    function* (threadId) {
+      yield* endRunForSwitch(threadId, null);
+      return yield* covens.clearThread(threadId);
     },
   );
 
@@ -301,6 +329,70 @@ const make = Effect.gen(function* () {
       return yield* policyDenied("This thread has no coven run in progress.");
     }
     return scope.run;
+  });
+
+  /**
+   * Cancels in-flight work. A coven stays with its thread, so this only ends the run
+   * itself (`end: true`) when the user switches covens or turns the coven off.
+   */
+  const haltRun = Effect.fn("haltRun")(function* (
+    run: CovenRunRecord,
+    options: {
+      readonly end: boolean;
+      readonly reason: string;
+      readonly eventKind: string;
+      readonly eventSummary: string;
+    },
+  ) {
+    const now = yield* nowIso;
+    const stopped = yield* covens.updateRun(run.id, (record) =>
+      Effect.sync(() => ({
+        state: {
+          ...record.state,
+          status: options.end
+            ? ("cancelled" as const)
+            : record.state.status === "awaiting_plan"
+              ? ("awaiting_plan" as const)
+              : ("running" as const),
+          statusReason: options.end ? options.reason : null,
+          resumeStatus: null,
+          pendingApprovals: record.state.pendingApprovals.filter(
+            (approval) => !options.end && approval.kind === "plan",
+          ),
+          gates: record.state.gates.map((round) =>
+            round.status === "open"
+              ? { ...round, status: "failed" as const, closedAt: now }
+              : round,
+          ),
+          tasks: record.state.tasks.map((task) =>
+            ACTIVE_TASK_STATUSES.has(task.status)
+              ? {
+                  ...replaceLatestAttempt(task, (attempt) =>
+                    attempt.status === "running"
+                      ? { ...attempt, status: "cancelled" as const, endedAt: now }
+                      : attempt,
+                  ),
+                  status: "cancelled" as const,
+                  updatedAt: now,
+                }
+              : task,
+          ),
+        },
+        events: [event(options.eventKind, options.eventSummary)],
+        result: record.state.tasks.filter((task) => task.status === "running"),
+      })),
+    );
+    yield* interrupt(run.leaderThreadId, options.reason);
+    for (const task of stopped) {
+      if (task.childThreadId) yield* interrupt(task.childThreadId, options.reason);
+    }
+    yield* threads
+      .stopDelegatedTasks({
+        threadId: run.leaderThreadId,
+        commandId: CommandId.make(`coven:${yield* uuid}`),
+        reason: options.reason,
+      })
+      .pipe(Effect.catchCause((cause) => Effect.logDebug("coven: stopDelegatedTasks", cause)));
   });
 
   const controlRun: CovenControlService["Service"]["controlRun"] = Effect.fn("controlRun")(
@@ -417,43 +509,12 @@ const make = Effect.gen(function* () {
           `The user resumed the run.${resumed.length > 0 ? ` ${resumed.length} task(s) continue.` : ""} Carry on with the plan.`,
         );
       } else {
-        const stopped = yield* covens.updateRun(run.id, (record) =>
-          Effect.succeed({
-            state: {
-              ...record.state,
-              status: "cancelled" as const,
-              statusReason: "Stopped by you.",
-              resumeStatus: null,
-              pendingApprovals: [],
-              tasks: record.state.tasks.map((task) =>
-                ACTIVE_TASK_STATUSES.has(task.status)
-                  ? {
-                      ...replaceLatestAttempt(task, (attempt) =>
-                        attempt.status === "running"
-                          ? { ...attempt, status: "cancelled" as const, endedAt: now }
-                          : attempt,
-                      ),
-                      status: "cancelled" as const,
-                      updatedAt: now,
-                    }
-                  : task,
-              ),
-            },
-            events: [event("run.stopped", "You stopped the run.")],
-            result: record.state.tasks.filter((task) => task.status === "running"),
-          }),
-        );
-        yield* interrupt(run.leaderThreadId, "Coven run stopped");
-        for (const task of stopped) {
-          if (task.childThreadId) yield* interrupt(task.childThreadId, "Coven run stopped");
-        }
-        yield* threads
-          .stopDelegatedTasks({
-            threadId: run.leaderThreadId,
-            commandId: CommandId.make(`coven:${yield* uuid}`),
-            reason: "Coven run stopped",
-          })
-          .pipe(Effect.catchCause((cause) => Effect.logDebug("coven: stopDelegatedTasks", cause)));
+        yield* haltRun(run, {
+          end: false,
+          reason: "Stopped by you.",
+          eventKind: "work.stopped",
+          eventSummary: "You stopped the current work. The coven is still here.",
+        });
       }
       return yield* covens.threadState(threadId);
     },
@@ -853,15 +914,23 @@ const make = Effect.gen(function* () {
               } as CovenCompletionResult,
             };
           }
+          // A coven stays with its thread: finishing a piece of work starts a fresh
+          // budget and gate cycle, and the next request continues with the same team.
           return {
             state: {
               ...record.state,
-              status: "completed" as const,
+              status: "running" as const,
               statusReason: null,
               summary: input.summary,
               pendingApprovals: [],
+              delegations: 0,
+              cycleStartedAt: now,
+              gates: [],
+              completedGates: [...(record.state.completedGates ?? []), ...record.state.gates].slice(
+                -20,
+              ),
             },
-            events: [event("run.completed", `The leader completed the run at ${now}.`)],
+            events: [event("work.completed", `Finished: ${input.summary}`)],
             result: { completed: true } as CovenCompletionResult,
           };
         }),
@@ -1340,25 +1409,27 @@ const make = Effect.gen(function* () {
     const nowMs = Date.parse(yield* nowIso);
     for (const run of yield* covens.activeRuns) {
       if (run.state.status === "paused") continue;
+      // The limit bounds one piece of work, not the coven's life on the thread.
+      if (!run.state.tasks.some((task) => ACTIVE_TASK_STATUSES.has(task.status))) continue;
       const definition = yield* covens.definitionAt(run.covenId, run.revision);
       if (definition === null) continue;
       const limitMs = definition.frontMatter.limits.maxRuntimeMinutes * 60_000;
-      if (nowMs - Date.parse(run.startedAt) < limitMs) continue;
+      if (nowMs - Date.parse(run.state.cycleStartedAt ?? run.startedAt) < limitMs) continue;
       yield* covens.updateRun(run.id, (record) =>
         Effect.succeed({
           state: {
             ...record.state,
             status: "paused" as const,
             resumeStatus: record.state.status,
-            statusReason: `The run passed its ${definition.frontMatter.limits.maxRuntimeMinutes} minute limit.`,
+            statusReason: `This piece of work passed its ${definition.frontMatter.limits.maxRuntimeMinutes} minute limit.`,
           },
-          events: [event("run.paused", "Paused: the run reached its time limit.")],
+          events: [event("run.paused", "Paused: this piece of work reached its time limit.")],
           result: undefined,
         }),
       );
       yield* notifyLeader(
         run,
-        "The run reached its time limit and is paused. Stop delegating; the user decides how to continue.",
+        "This piece of work reached its time limit and is paused. Stop delegating; the user decides how to continue.",
       );
     }
   }).pipe(Effect.catchCause((cause) => Effect.logWarning("coven: runtime sweep failed", cause)));
@@ -1448,6 +1519,7 @@ const make = Effect.gen(function* () {
 
   return CovenControlService.of({
     setThread,
+    clearThread,
     controlRun,
     decide,
     proposePlan,

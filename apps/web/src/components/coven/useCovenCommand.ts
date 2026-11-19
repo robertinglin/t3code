@@ -8,6 +8,7 @@ import type {
   RuntimeMode,
   ThreadId,
 } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -19,6 +20,7 @@ import {
 } from "@t3tools/shared/covenCommands";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
+import { useRightPanelStore } from "../../rightPanelStore";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -185,6 +187,11 @@ export function useCovenCommand(input: {
       });
   };
 
+  const openPanel = () => {
+    if (threadId === null) return;
+    useRightPanelStore.getState().open(scopeThreadRef(environmentId, threadId), "coven");
+  };
+
   const change = async (coven: CovenSummary) => {
     if (threadId === null) {
       notice("Open a thread first", "A coven attaches to a thread.");
@@ -206,6 +213,7 @@ export function useCovenCommand(input: {
       selectComposerModel?.(leader.primary.providerInstanceId, leader.primary.modelId);
     }
     notice(`Using ${coven.name} · revision ${coven.revision}`, describeCovenRoles(coven));
+    openPanel();
   };
 
   const off = async () => {
@@ -245,6 +253,10 @@ export function useCovenCommand(input: {
       case "show": {
         const coven = resolve(command.kind === "show" ? command.name : null);
         if (coven === null) break;
+        if (command.kind === "status" && threadCoven?.binding?.covenId === coven.id) {
+          openPanel();
+          break;
+        }
         const run = command.kind === "status" ? threadCoven?.run : null;
         notice(
           `${coven.name} · revision ${coven.revision}`,

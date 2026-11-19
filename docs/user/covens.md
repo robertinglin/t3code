@@ -32,10 +32,12 @@ holds the mission, shared guidance, and a `## Role: <id>` section for each role.
 Pick a coven under **Coven** at the bottom of the sidebar (type to search by name, alias or
 description), or type `/coven change <name>`. The
 thread switches to the leader's model. Choose **No coven**, or type `/coven off`, to go back to a
-single agent. You can't switch covens while a run is active; pause or stop it first. Names match by
+single agent. Switching covens, or turning the coven off, cancels any work still in flight. Names match by
 id, slug, name or alias, and a unique prefix is enough.
 
-In a coven thread, the thread's agent is the leader. Its first turn starts a run. If the coven has
+In a coven thread, the thread's agent is the leader. A coven stays with its thread until you switch
+covens: finishing a piece of work doesn't end it, and the next message continues with the same team.
+Its first turn starts the coven's run. If the coven has
 `autonomy.initialPlanApproval`, the leader proposes a plan and waits; approve or reject it in the
 sidebar or with `/coven approve` and `/coven reject`. The leader then hands work to worker roles.
 Each task opens a child thread on the role's first available model, with the role's instructions,
@@ -91,7 +93,7 @@ directory instead.
 | `/coven status`              | Show the run: status, leader, tasks, what's waiting. |
 | `/coven pause`               | Pause the run and interrupt running work.            |
 | `/coven resume`              | Continue a paused run.                               |
-| `/coven stop`                | End the run. Running tasks are cancelled.            |
+| `/coven stop`                | Cancel the work in flight. The coven stays.          |
 | `/coven approve [note]`      | Approve the plan or gate that is waiting on you.     |
 | `/coven reject [note]`       | Reject it.                                           |
 | `/coven edit [name]`         | Open the editor.                                     |
@@ -102,8 +104,8 @@ directory instead.
 ## Limits
 
 - `maxActiveWorkers` caps how many tasks run at once, and `maxDelegationsPerRun` caps how many the
-  leader can start in one run.
+  leader can start for one piece of work. The count resets when the leader finishes it.
 - With the `hybrid` workspace policy, only one worker writes in the shared checkout at a time;
   others get their own worktree. `isolated-worktrees` gives every worker a worktree.
-- A run that goes past `maxRuntimeMinutes` is paused.
+- A piece of work that goes past `maxRuntimeMinutes` is paused. Idle time doesn't count.
 - Saving creates a new revision. A running run keeps the revision it started with.

@@ -219,7 +219,7 @@ const CovenSubmitVoteTool = Tool.make("coven_gate_submit_vote", {
 
 const CovenCompleteRunTool = Tool.make("coven_complete_run", {
   description:
-    "Coven leader only: finish the run. T3 checks that no task is open and every completion gate that applies has passed.",
+    "Coven leader only: mark the current piece of work done. T3 checks that no task is open and every completion gate that applies has passed. The coven stays on the thread for the next request.",
   parameters: Schema.Struct({
     summary: text(8000),
     codeChanged: Schema.Boolean,

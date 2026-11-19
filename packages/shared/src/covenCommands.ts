@@ -128,7 +128,7 @@ export const COVEN_HELP_TEXT = [
   "/coven edit [name]: open the coven editor",
   "/coven status: show this thread's coven run",
   "/coven pause | resume: hold or continue the run",
-  "/coven stop: cancel the run",
+  "/coven stop: cancel the work in flight (the coven stays)",
   "/coven approve [note] | reject [note]: decide the waiting plan or gate",
   "/coven export [name]: copy the definition",
   "/coven-build <description>: start a new coven from a description",

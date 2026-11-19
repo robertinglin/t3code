@@ -54,13 +54,13 @@ export function reportCovenFailure(title: string, result: AtomCommandResult<unkn
 const RUN_ACTION_FAILURE: Record<CovenRunAction, string> = {
   pause: "Could not pause the coven run",
   resume: "Could not resume the coven run",
-  stop: "Could not stop the coven run",
+  stop: "Could not stop the coven's work",
 };
 
 const RUN_ACTION_DONE: Record<CovenRunAction, string> = {
   pause: "Coven run paused",
   resume: "Coven run resumed",
-  stop: "Coven run stopped",
+  stop: "Stopped the coven's current work",
 };
 
 const ACTIVE_STATUSES = new Set<CovenRunView["status"]>([
@@ -107,8 +107,8 @@ export function useCovenActions(environmentId: EnvironmentId) {
     if (action === "stop") {
       const confirmed = await readLocalApi()?.dialogs.confirm(
         [
-          "Stop this coven run?",
-          "Running tasks are interrupted where the provider supports it and the rest are cancelled. Work in progress stays on disk for review. Pause instead if you want to continue later.",
+          "Stop the coven's current work?",
+          "Running tasks are interrupted where the provider supports it and the rest are cancelled. Work in progress stays on disk for review. The coven stays on this thread for your next message. Pause instead if you want to continue this work later.",
         ].join("\n"),
         { variant: "destructive" },
       );

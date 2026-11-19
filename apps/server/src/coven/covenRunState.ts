@@ -27,7 +27,12 @@ export interface CovenRunState {
   readonly plan: CovenRunView["plan"];
   readonly leader: CovenRunView["leader"];
   readonly leaderTransitions: number;
+  /** Delegations used by the current piece of work; reset when the leader completes it. */
   readonly delegations: number;
+  /** When the current piece of work started. Older rows fall back to the run's start. */
+  readonly cycleStartedAt?: string | undefined;
+  /** Gate rounds from earlier pieces of work, kept for the record. */
+  readonly completedGates?: ReadonlyArray<CovenGateRound> | undefined;
   readonly tasks: ReadonlyArray<CovenTaskState>;
   readonly gates: ReadonlyArray<CovenGateRound>;
   readonly pendingApprovals: ReadonlyArray<CovenPendingApproval>;
@@ -115,7 +120,7 @@ export function toRunView(
     tasks: state.tasks.map(
       ({ clientRequestId: _c, candidateIndex: _i, transientRetries: _r, ...task }) => task,
     ),
-    gates: state.gates,
+    gates: [...(state.completedGates ?? []), ...state.gates],
     pendingApprovals: state.pendingApprovals,
     events,
     summary: state.summary,

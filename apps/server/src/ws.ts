@@ -2367,7 +2367,7 @@ export const layerWsRpc = (
             summary: null,
           }),
         [WS_METHODS.covensSaveDraft]: (input) => covenControl.saveDraft(input.draftId),
-        [WS_METHODS.covensClearThread]: (input) => covens.clearThread(input.threadId),
+        [WS_METHODS.covensClearThread]: (input) => covenControl.clearThread(input.threadId),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),
