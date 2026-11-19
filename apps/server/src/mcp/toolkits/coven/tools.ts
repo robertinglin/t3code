@@ -42,14 +42,14 @@ const CovenTaskView = Schema.Struct({
   status: Schema.String,
   childThreadId: Schema.NullOr(Schema.String),
   model: Schema.String,
-  attempts: Schema.Number,
+  attempts: Schema.Int,
   lastFailure: Schema.NullOr(Schema.String),
 });
 
 const CovenGateRoundView = Schema.Struct({
   id: Schema.String,
   gateId: Schema.String,
-  round: Schema.Number,
+  round: Schema.Int,
   status: Schema.String,
   detail: Schema.String,
   votes: Schema.Array(
@@ -63,8 +63,8 @@ const CovenRunSnapshot = Schema.Struct({
   statusReason: Schema.NullOr(Schema.String),
   plan: Schema.NullOr(Schema.Struct({ status: Schema.String, text: Schema.String })),
   leader: Schema.String,
-  delegationsUsed: Schema.Number,
-  maxDelegations: Schema.Number,
+  delegationsUsed: Schema.Int,
+  maxDelegations: Schema.Int,
   tasks: Schema.Array(CovenTaskView),
   gates: Schema.Array(CovenGateRoundView),
   docsPath: Schema.NullOr(Schema.String),
@@ -78,17 +78,17 @@ const CovenCapabilitiesTool = Tool.make("coven_capabilities", {
       Schema.Struct({
         id: Schema.String,
         name: Schema.String,
-        revision: Schema.Number,
+        revision: Schema.Int,
         yourRole: Schema.String,
         mission: Schema.String,
         sharedGuidance: Schema.String,
         roles: Schema.Array(CovenRoleView),
         gates: Schema.Array(CovenGateView),
         limits: Schema.Struct({
-          maxActiveWorkers: Schema.Number,
-          maxDelegationsPerRun: Schema.Number,
-          maxReviewFixRounds: Schema.Number,
-          maxRuntimeMinutes: Schema.Number,
+          maxActiveWorkers: Schema.Int,
+          maxDelegationsPerRun: Schema.Int,
+          maxReviewFixRounds: Schema.Int,
+          maxRuntimeMinutes: Schema.Int,
         }),
         planApprovalRequired: Schema.Boolean,
         run: Schema.NullOr(CovenRunSnapshot),
@@ -259,12 +259,12 @@ const CovenBuilderProposePatchTool = Tool.make("coven_builder_propose_patch", {
     "Coven builder threads only: replace the coven draft with a complete new definition file. T3 validates it, and the user sees it in the editor and saves it.",
   parameters: Schema.Struct({
     source: text(262_144).annotate({ description: "The whole coven Markdown file." }),
-    expectedVersion: Schema.Number.annotate({ description: "The draft version you edited." }),
+    expectedVersion: Schema.Int.annotate({ description: "The draft version you edited." }),
     summary: text(500).annotate({ description: "One line on what changed." }),
   }),
   success: Schema.Struct({
     accepted: Schema.Boolean,
-    version: Schema.Number,
+    version: Schema.Int,
     issues: Schema.Array(Schema.Struct({ path: Schema.String, message: Schema.String })),
     currentSource: Schema.optional(Schema.String),
   }),
@@ -282,7 +282,7 @@ const CovenBuilderReadDraftTool = Tool.make("coven_builder_read_draft", {
     "Coven builder threads only: the current draft file, its version, its validation problems, and the providers and models you can use.",
   success: Schema.Struct({
     source: Schema.String,
-    version: Schema.Number,
+    version: Schema.Int,
     issues: Schema.Array(Schema.Struct({ path: Schema.String, message: Schema.String })),
     providers: Schema.Array(
       Schema.Struct({ providerInstanceId: Schema.String, models: Schema.Array(Schema.String) }),

@@ -93,7 +93,7 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
     htmlRender: Schema.Struct({
       attachmentId: Schema.String,
       title: Schema.String,
-      height: Schema.Number,
+      height: Schema.Int,
       heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
     }),
     message: Schema.String,
