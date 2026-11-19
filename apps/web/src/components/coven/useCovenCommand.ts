@@ -4,6 +4,7 @@ import type {
   EnvironmentId,
   ModelSelection,
   ProjectId,
+  ProviderInstanceId,
   RuntimeMode,
   ThreadId,
 } from "@t3tools/contracts";
@@ -72,8 +73,11 @@ export function useCovenCommand(input: {
   readonly projectId: ProjectId | null;
   readonly runtimeMode: RuntimeMode | undefined;
   readonly currentModel: () => ModelSelection | undefined;
+  /** Set for a new thread that hasn't been sent yet: its first turn runs on the composer's model. */
+  readonly selectComposerModel: ((instanceId: ProviderInstanceId, model: string) => void) | null;
 }): (text: string) => boolean {
-  const { environmentId, threadId, projectId, runtimeMode, currentModel } = input;
+  const { environmentId, threadId, projectId, runtimeMode, currentModel, selectComposerModel } =
+    input;
   const covens = useEnvironmentQuery(serverEnvironment.covensLive({ environmentId, input: {} }))
     .data?.covens;
   const threadCoven = useEnvironmentQuery(
@@ -183,7 +187,7 @@ export function useCovenCommand(input: {
 
   const change = async (coven: CovenSummary) => {
     if (threadId === null) {
-      notice("Send a first message", "A coven attaches to a thread once the thread exists.");
+      notice("Open a thread first", "A coven attaches to a thread.");
       return;
     }
     const result = await setThreadCoven({
@@ -195,6 +199,11 @@ export function useCovenCommand(input: {
         failure("Could not change the coven", String(squashAtomCommandFailure(result)));
       }
       return;
+    }
+    // An unsent thread has no server model to switch yet, so its first turn starts on the leader.
+    const leader = coven.roles.find((role) => role.kind === "orchestrator");
+    if (leader !== undefined) {
+      selectComposerModel?.(leader.primary.providerInstanceId, leader.primary.modelId);
     }
     notice(`Using ${coven.name} · revision ${coven.revision}`, describeCovenRoles(coven));
   };

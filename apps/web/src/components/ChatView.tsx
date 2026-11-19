@@ -2988,10 +2988,12 @@ export default function ChatView(props: ChatViewProps) {
   });
   const runCovenCommand = useCovenCommand({
     environmentId,
-    threadId: routeKind === "server" ? threadId : null,
+    // A new thread keeps its id when first sent, so a coven can attach to it beforehand.
+    threadId,
     projectId: activeProject?.id ?? null,
     runtimeMode,
     currentModel: () => composerRef.current?.getSendContext().selectedModelSelection,
+    selectComposerModel: routeKind === "draft" ? onProviderModelSelectStable : null,
   });
   const { onSend } = useComposerSend({
     environmentId,
