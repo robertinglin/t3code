@@ -120,6 +120,8 @@ export const SidebarCovenSection = memo(function SidebarCovenSection({
       if (thread === null) return;
       await actions.startBuilder({
         fromThreadId: threadId,
+        projectId: null,
+        runtimeMode: undefined,
         modelSelection: thread.modelSelection,
         prompt: BUILDER_PROMPT,
       });

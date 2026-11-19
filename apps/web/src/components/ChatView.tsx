@@ -2989,6 +2989,8 @@ export default function ChatView(props: ChatViewProps) {
   const runCovenCommand = useCovenCommand({
     environmentId,
     threadId: routeKind === "server" ? threadId : null,
+    projectId: activeProject?.id ?? null,
+    runtimeMode,
     currentModel: () => composerRef.current?.getSendContext().selectedModelSelection,
   });
   const { onSend } = useComposerSend({

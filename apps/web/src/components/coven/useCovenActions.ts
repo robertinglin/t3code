@@ -3,6 +3,8 @@ import type {
   CovenRunView,
   EnvironmentId,
   ModelSelection,
+  ProjectId,
+  RuntimeMode,
   ThreadCovenState,
   ThreadId,
 } from "@t3tools/contracts";
@@ -158,7 +160,9 @@ export function useCovenActions(environmentId: EnvironmentId) {
 
   /** Starts a builder chat beside `fromThreadId` and opens it. */
   const startBuilder = async (input: {
-    readonly fromThreadId: ThreadId;
+    readonly fromThreadId: ThreadId | null;
+    readonly projectId: ProjectId | null;
+    readonly runtimeMode: RuntimeMode | undefined;
     readonly modelSelection: ModelSelection;
     readonly prompt: string;
     readonly baseCovenId?: CovenId | undefined;
@@ -166,7 +170,9 @@ export function useCovenActions(environmentId: EnvironmentId) {
     const result = await startCovenBuilder({
       environmentId,
       input: {
-        fromThreadId: input.fromThreadId,
+        ...(input.fromThreadId === null ? {} : { fromThreadId: input.fromThreadId }),
+        ...(input.projectId === null ? {} : { projectId: input.projectId }),
+        ...(input.runtimeMode === undefined ? {} : { runtimeMode: input.runtimeMode }),
         modelSelection: input.modelSelection,
         prompt: input.prompt,
         ...(input.baseCovenId === undefined ? {} : { baseCovenId: input.baseCovenId }),

@@ -3,6 +3,8 @@ import type {
   CovenSummary,
   EnvironmentId,
   ModelSelection,
+  ProjectId,
+  RuntimeMode,
   ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -66,9 +68,12 @@ function describeRun(run: CovenRunView): string {
 export function useCovenCommand(input: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId | null;
+  /** The project of the open thread, including a new thread that hasn't been sent yet. */
+  readonly projectId: ProjectId | null;
+  readonly runtimeMode: RuntimeMode | undefined;
   readonly currentModel: () => ModelSelection | undefined;
 }): (text: string) => boolean {
-  const { environmentId, threadId, currentModel } = input;
+  const { environmentId, threadId, projectId, runtimeMode, currentModel } = input;
   const covens = useEnvironmentQuery(serverEnvironment.covensLive({ environmentId, input: {} }))
     .data?.covens;
   const threadCoven = useEnvironmentQuery(
@@ -125,8 +130,8 @@ export function useCovenCommand(input: {
     );
 
   const build = (prompt: string, baseCovenId?: CovenSummary["id"]) => {
-    if (threadId === null) {
-      notice("Send a first message", "The coven builder starts beside an existing thread.");
+    if (threadId === null && projectId === null) {
+      notice("Open a project first", "The coven builder chat starts in the open project.");
       return;
     }
     const model = currentModel();
@@ -136,6 +141,8 @@ export function useCovenCommand(input: {
     }
     void actions.startBuilder({
       fromThreadId: threadId,
+      projectId,
+      runtimeMode,
       modelSelection: model,
       prompt,
       baseCovenId,

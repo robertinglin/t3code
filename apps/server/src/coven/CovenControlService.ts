@@ -1,6 +1,7 @@
 import {
   CommandId,
   CovenError,
+  DEFAULT_RUNTIME_MODE,
   MessageId,
   ModelSelection,
   type CovenCandidate,
@@ -1370,10 +1371,16 @@ const make = Effect.gen(function* () {
 
   const startBuilder: CovenControlService["Service"]["startBuilder"] = Effect.fn("startBuilder")(
     function* (input) {
-      const shell = yield* threads
-        .getThreadShell(input.fromThreadId)
-        .pipe(Effect.orElseSucceed(() => null));
-      if (shell === null) return yield* notFound("Open a thread in a project to build a coven.");
+      const shell =
+        input.fromThreadId === undefined
+          ? null
+          : yield* threads
+              .getThreadShell(input.fromThreadId)
+              .pipe(Effect.orElseSucceed(() => null));
+      const projectId = shell?.projectId ?? input.projectId;
+      if (projectId === undefined) {
+        return yield* notFound("Open a project to build a coven.");
+      }
       const base = input.baseCovenId ? yield* covens.get(input.baseCovenId) : null;
       const name = "New coven";
       const source =
@@ -1396,11 +1403,11 @@ const make = Effect.gen(function* () {
       const launched = yield* launcher
         .launch({
           commandId: CommandId.make(`coven:${yield* uuid}`),
-          projectId: shell.projectId,
+          projectId,
           title: base ? `Edit coven: ${base.summary.name}` : "Build a coven",
           modelSelection: input.modelSelection,
-          runtimeMode: shell.runtimeMode,
-          interactionMode: shell.interactionMode,
+          runtimeMode: shell?.runtimeMode ?? input.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+          interactionMode: shell?.interactionMode ?? "default",
           workspaceStrategy: { type: "root" },
           initialMessage: {
             messageId: MessageId.make(`coven:${yield* uuid}`),

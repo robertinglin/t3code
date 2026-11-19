@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
-import { IsoDateTime, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { RuntimeMode } from "./providerPolicy.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { ModelSelection } from "./modelSelection.ts";
 
@@ -480,7 +481,10 @@ export type CovenDraft = typeof CovenDraft.Type;
 
 export const CovenStartBuilderInput = Schema.Struct({
   /** The thread `/coven-build` was typed in; the builder thread joins its project. */
-  fromThreadId: ThreadId,
+  fromThreadId: Schema.optional(ThreadId),
+  /** Used when `/coven-build` is typed in a new thread that hasn't been sent yet. */
+  projectId: Schema.optional(ProjectId),
+  runtimeMode: Schema.optional(RuntimeMode),
   modelSelection: ModelSelection,
   prompt: Schema.String.check(Schema.isMaxLength(8_000)),
   baseCovenId: Schema.optional(CovenId),
