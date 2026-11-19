@@ -106,6 +106,8 @@ export class CovenControlService extends Context.Service<
       covenId: string,
     ) => Effect.Effect<ThreadCovenState, CovenError>;
     readonly clearThread: (threadId: ThreadId) => Effect.Effect<ThreadCovenState, CovenError>;
+    /** Deletes (archives) a coven and takes it off every thread it's attached to. */
+    readonly archive: (covenId: string) => Effect.Effect<{ readonly covenId: string }, CovenError>;
     readonly controlRun: (
       threadId: ThreadId,
       action: "pause" | "resume" | "stop",
@@ -313,6 +315,15 @@ const make = Effect.gen(function* () {
     function* (threadId) {
       yield* endRunForSwitch(threadId, null);
       return yield* covens.clearThread(threadId);
+    },
+  );
+
+  const archive: CovenControlService["Service"]["archive"] = Effect.fn("archive")(
+    function* (covenId) {
+      for (const threadId of yield* covens.boundThreads(covenId)) {
+        yield* clearThread(threadId);
+      }
+      return yield* covens.archive(covenId);
     },
   );
 
@@ -1520,6 +1531,7 @@ const make = Effect.gen(function* () {
   return CovenControlService.of({
     setThread,
     clearThread,
+    archive,
     controlRun,
     decide,
     proposePlan,

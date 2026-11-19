@@ -94,6 +94,7 @@ directory instead.
 | `/coven pause`               | Pause the run and interrupt running work.            |
 | `/coven resume`              | Continue a paused run.                               |
 | `/coven stop`                | Cancel the work in flight. The coven stays.          |
+| `/coven delete [name]`       | Delete a coven and take it off every thread.         |
 | `/coven approve [note]`      | Approve the plan or gate that is waiting on you.     |
 | `/coven reject [note]`       | Reject it.                                           |
 | `/coven edit [name]`         | Open the editor.                                     |

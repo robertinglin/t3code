@@ -274,6 +274,11 @@ export function useCovenCommand(input: {
       case "off":
         void off();
         break;
+      case "delete": {
+        const coven = resolve(command.name);
+        if (coven !== null) void actions.deleteCoven(coven);
+        break;
+      }
       case "edit": {
         const coven = resolve(command.name);
         if (coven !== null) void edit(coven);

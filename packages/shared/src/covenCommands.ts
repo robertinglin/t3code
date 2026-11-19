@@ -12,6 +12,7 @@ export type CovenCommand =
   | { readonly kind: "show"; readonly name: string | null }
   | { readonly kind: "edit"; readonly name: string | null }
   | { readonly kind: "export"; readonly name: string | null }
+  | { readonly kind: "delete"; readonly name: string | null }
   | { readonly kind: "build"; readonly prompt: string }
   | { readonly kind: "build-edit"; readonly name: string }
   | { readonly kind: "invalid"; readonly message: string };
@@ -70,6 +71,8 @@ export function parseCovenCommand(prompt: string): CovenCommand | null {
       return { kind: "edit", name: arg || null };
     case "export":
       return { kind: "export", name: arg || null };
+    case "delete":
+      return { kind: "delete", name: arg || null };
     case "change":
     case "use": {
       const name = unquote(argParts[0]?.toLowerCase() === "to" ? arg.replace(/^to\s+/i, "") : arg);
@@ -131,6 +134,7 @@ export const COVEN_HELP_TEXT = [
   "/coven stop: cancel the work in flight (the coven stays)",
   "/coven approve [note] | reject [note]: decide the waiting plan or gate",
   "/coven export [name]: copy the definition",
+  "/coven delete [name]: delete a coven and take it off every thread",
   "/coven-build <description>: start a new coven from a description",
   "/coven-build edit <name>: revise a coven",
 ].join("\n");

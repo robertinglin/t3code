@@ -2343,7 +2343,7 @@ export const layerWsRpc = (
         [WS_METHODS.covensSubscribeList]: (input) => covens.subscribeList(input),
         [WS_METHODS.covensGet]: (input) => covens.get(input.covenId),
         [WS_METHODS.covensSave]: (input) => covens.save(input),
-        [WS_METHODS.covensArchive]: (input) => covens.archive(input.covenId),
+        [WS_METHODS.covensArchive]: (input) => covenControl.archive(input.covenId),
         [WS_METHODS.covensSubscribeThread]: (input) => covens.subscribeThread(input.threadId),
         [WS_METHODS.covensSetThread]: (input) =>
           covenControl.setThread(input.threadId, input.covenId),

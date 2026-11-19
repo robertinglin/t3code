@@ -226,6 +226,16 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
             ) : null}
             <MenuSeparator />
             <MenuItem onClick={() => void choose(NO_COVEN)}>Remove from thread</MenuItem>
+            <MenuItem
+              variant="destructive"
+              onClick={() =>
+                void guard(() =>
+                  actions.deleteCoven({ id: binding.covenId, name: summary?.name ?? binding.name }),
+                )
+              }
+            >
+              Delete coven
+            </MenuItem>
           </MenuPopup>
         </Menu>
       }

@@ -102,6 +102,11 @@ describe("parseCovenCommand", () => {
       name: "Sales Team",
     });
     expect(parseCovenCommand("/coven off")).toEqual({ kind: "off" });
+    expect(parseCovenCommand("/coven delete")).toEqual({ kind: "delete", name: null });
+    expect(parseCovenCommand('/coven delete "Game Design"')).toEqual({
+      kind: "delete",
+      name: "Game Design",
+    });
     expect(parseCovenCommand("/coven")).toEqual({ kind: "help" });
     expect(parseCovenCommand("/coven show")).toEqual({ kind: "show", name: null });
   });

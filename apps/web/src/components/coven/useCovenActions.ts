@@ -93,6 +93,9 @@ export function useCovenActions(environmentId: EnvironmentId) {
   const startCovenBuilder = useAtomCommand(serverEnvironment.startCovenBuilder, {
     label: "coven builder start",
   });
+  const archiveCoven = useAtomCommand(serverEnvironment.archiveCoven, {
+    label: "coven delete",
+  });
 
   const openThread = (threadId: ThreadId) =>
     void router.navigate({
@@ -186,5 +189,24 @@ export function useCovenActions(environmentId: EnvironmentId) {
     return true;
   };
 
-  return { control, decide, clearCooldown, startBuilder, openThread };
+  /** Deletes a coven after confirming. Threads using it go back to a single agent. */
+  const deleteCoven = async (coven: { readonly id: CovenId; readonly name: string }) => {
+    const confirmed = await readLocalApi()?.dialogs.confirm(
+      [
+        `Delete the ${coven.name} coven?`,
+        "It disappears from the coven picker. Threads using it go back to a single agent, and any coven work still in progress is cancelled. Run notes already written stay in the project.",
+      ].join("\n"),
+      { variant: "destructive" },
+    );
+    if (!confirmed) return false;
+    const result = await archiveCoven({ environmentId, input: { covenId: coven.id } });
+    if (result._tag === "Failure") {
+      reportCovenFailure("Could not delete the coven", result);
+      return false;
+    }
+    toastManager.add(stackedThreadToast({ type: "success", title: `Deleted ${coven.name}` }));
+    return true;
+  };
+
+  return { control, decide, clearCooldown, startBuilder, openThread, deleteCoven };
 }

@@ -93,6 +93,8 @@ export class CovenService extends Context.Service<
       readonly expectedRevision?: number | undefined;
     }) => Effect.Effect<CovenDetail, CovenError>;
     readonly archive: (covenId: string) => Effect.Effect<{ readonly covenId: string }, CovenError>;
+    /** Threads the coven is attached to. */
+    readonly boundThreads: (covenId: string) => Effect.Effect<ReadonlyArray<ThreadId>, CovenError>;
     readonly subscribeThread: (threadId: ThreadId) => Stream.Stream<ThreadCovenState, CovenError>;
     readonly threadState: (threadId: ThreadId) => Effect.Effect<ThreadCovenState, CovenError>;
     readonly setThread: (
@@ -412,6 +414,14 @@ const make = Effect.gen(function* () {
       return { covenId };
     },
   );
+
+  const boundThreads: CovenService["Service"]["boundThreads"] = (covenId) =>
+    sql<{ thread_id: string }>`
+      SELECT thread_id FROM thread_coven_bindings WHERE coven_id = ${covenId}
+    `.pipe(
+      Effect.mapError(storageError("Could not read the coven's threads.")),
+      Effect.map((rows) => rows.map((row) => ThreadId.make(row.thread_id))),
+    );
 
   const readBinding = (threadId: string) =>
     sql<BindingRow>`
@@ -896,6 +906,7 @@ const make = Effect.gen(function* () {
     getRevision,
     save,
     archive,
+    boundThreads,
     subscribeThread: (threadId) => changesThen(threadState(threadId)),
     threadState,
     setThread,
