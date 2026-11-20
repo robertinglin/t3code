@@ -9,6 +9,7 @@ import type { GrokSettings } from "../settings.ts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
@@ -16,6 +17,10 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { normalizeModelSlug } from "@t3tools/shared/model";
 
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { makeXAiPromptCompletionRuntime } from "./xaiAcpExtension.ts";
 
 const GROK_API_KEY_ENV = "XAI_API_KEY";
@@ -129,15 +134,46 @@ export const makeGrokAcpRuntime = Effect.fn("GrokAcpSupport.makeGrokAcpRuntime")
   ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom | Scope.Scope
 > {
   const processGroupPlatform = yield* HostProcess.Platform.pipe(Effect.provide(NodeServices.layer));
+  const spawn = buildGrokAcpSpawnInput(
+    input.grokSettings,
+    input.cwd,
+    input.environment,
+    input.runtimeMode,
+  );
+  const launcherPolicy = Option.getOrUndefined(yield* Effect.serviceOption(AgentLauncherPolicy));
+  const launch = resolveAgentLaunch(
+    {
+      agent: "grok",
+      executable: spawn.command,
+      args: spawn.args,
+      ...(spawn.cwd === undefined ? {} : { cwd: spawn.cwd }),
+      ...(spawn.env === undefined ? {} : { env: spawn.env }),
+      biliCompatibility: {
+        supported: false,
+        reason: "The installed bili command does not list a Grok launcher.",
+      },
+    },
+    launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+  );
+  if (launch._tag === "Unsupported") {
+    return yield* new EffectAcpErrors.AcpTransportError({
+      detail: launch.message,
+      cause: launch.message,
+    });
+  }
+  const resolvedSpawn =
+    launch.launch.command === spawn.command
+      ? spawn
+      : {
+          command: launch.launch.command,
+          args: [...launch.launch.args],
+          ...(launch.launch.cwd === undefined ? {} : { cwd: launch.launch.cwd }),
+          ...(launch.launch.env === undefined ? {} : { env: launch.launch.env }),
+        };
   const acpContext = yield* Layer.build(
     AcpSessionRuntime.layer({
       ...input,
-      spawn: buildGrokAcpSpawnInput(
-        input.grokSettings,
-        input.cwd,
-        input.environment,
-        input.runtimeMode,
-      ),
+      spawn: resolvedSpawn,
       authMethodId: resolveGrokAuthMethodId(input.environment),
       cancelMeta: { ...input.cancelMeta, ...GROK_ACP_CANCEL_META },
       initializeMeta: GROK_ACP_INITIALIZE_META,

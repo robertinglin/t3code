@@ -636,7 +636,10 @@ function PoolWindowCard({
 
 function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: number }) {
   const color = barColor(pool.driver);
-  const label = providerClients.get(pool.driver)?.label ?? String(pool.driver);
+  const label =
+    (pool.driver === "acpRegistry" ? pool.accounts[0]?.displayName : undefined) ??
+    providerClients.get(pool.driver)?.label ??
+    String(pool.driver);
   const windows = displayLimitWindows(pool);
   const m = useMessages();
   return (
@@ -692,7 +695,7 @@ export function UsageLimitsPooled({
       ) : null}
       <SegmentPopoverContext value={segmentPopover}>
         {pools.map((pool) => (
-          <Fragment key={pool.driver}>
+          <Fragment key={pool.key}>
             <PoolSection pool={pool} now={now} />
           </Fragment>
         ))}

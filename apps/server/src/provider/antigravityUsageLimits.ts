@@ -10,12 +10,15 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import {
   makeUnavailableUsageLimits,
   makeUsageLimits,
 } from "@t3tools/provider-core/server/usageLimits";
+import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
 
 export function antigravityUserAgent(platform: NodeJS.Platform, architecture: NodeJS.Architecture) {
   return `antigravity/hub/2.24.0 (aidev_client; os_type=${platform}; arch=${architecture}; cl=963137146)`;
@@ -48,6 +51,7 @@ const CliToken = Schema.Struct({
     refresh_token: Schema.optional(Schema.String),
     expiry: Schema.optional(Schema.String),
   }),
+  project_id: Schema.optional(Schema.String),
 });
 const TokenResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
@@ -142,6 +146,50 @@ const sha256 = Effect.fnUntraced(function* (text: string) {
     new TextEncoder().encode(text),
   );
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+});
+
+const ANTIGRAVITY_KEYRING_SERVICE = "gemini";
+const ANTIGRAVITY_KEYRING_ACCOUNT = "antigravity";
+
+/** Antigravity CLI 1.5+ stores its OAuth token in the OS keyring. */
+export const readAntigravityKeyringToken = Effect.fn("readAntigravityKeyringToken")(function* (
+  spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
+  platform: NodeJS.Platform,
+): Effect.fn.Return<string | undefined> {
+  const command =
+    platform === "linux"
+      ? ChildProcess.make("secret-tool", [
+          "lookup",
+          "service",
+          ANTIGRAVITY_KEYRING_SERVICE,
+          "username",
+          ANTIGRAVITY_KEYRING_ACCOUNT,
+        ])
+      : platform === "darwin"
+        ? ChildProcess.make("security", [
+            "find-generic-password",
+            "-s",
+            ANTIGRAVITY_KEYRING_SERVICE,
+            "-a",
+            ANTIGRAVITY_KEYRING_ACCOUNT,
+            "-w",
+          ])
+        : undefined;
+  if (!command) return undefined;
+  return yield* Effect.gen(function* () {
+    const child = yield* spawner.spawn(command);
+    const [stdout, exitCode] = yield* Effect.all(
+      [collectUint8StreamText({ stream: child.stdout, maxBytes: 64 * 1024 }), child.exitCode],
+      { concurrency: "unbounded" },
+    );
+    if (Number(exitCode) !== 0 || stdout.truncated) return undefined;
+    const text = stdout.text.trim();
+    return text.length > 0 ? text : undefined;
+  }).pipe(
+    Effect.scoped,
+    Effect.timeout("5 seconds"),
+    Effect.orElseSucceed(() => undefined),
+  );
 });
 
 /** go-keyring stores UTF-8, which it prefixes and encodes on macOS. */
@@ -321,6 +369,7 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
   readonly profileDirectory: string;
   readonly authMethod: AntigravitySettings["authMethod"];
   readonly readKeyringSecret?: Effect.Effect<string | undefined, AntigravityKeyringError>;
+  readonly readKeyringToken?: Effect.Effect<string | undefined>;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -362,9 +411,11 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
       // Google account instances bypass the keyring, whose one entry every profile shares.
       const stored = (yield* fs.exists(cliTokenPath))
         ? yield* fs.readFileString(cliTokenPath)
-        : input.authMethod === "oauth-business"
-          ? yield* readKeyringSecret
-          : undefined;
+        : input.readKeyringToken !== undefined
+          ? yield* input.readKeyringToken
+          : input.authMethod === "oauth-business"
+            ? yield* readKeyringSecret
+            : undefined;
       if (stored === undefined) {
         return makeUnavailableUsageLimits({
           checkedAt,
@@ -372,8 +423,10 @@ export const makeAntigravityUsageProbe = Effect.fn("makeAntigravityUsageProbe")(
           message: "Sign in with Google to see Antigravity limits.",
         });
       }
-      const { token } = yield* decodeCliToken(stored);
-      if (!(Date.parse(token.expiry ?? "") > now + 60_000)) {
+      const cliToken = yield* decodeCliToken(stored);
+      const { token } = cliToken;
+      projectId = cliToken.project_id;
+      if (token.expiry !== undefined && !(Date.parse(token.expiry) > now + 60_000)) {
         return makeUnavailableUsageLimits({
           checkedAt,
           reason: "probeFailed",

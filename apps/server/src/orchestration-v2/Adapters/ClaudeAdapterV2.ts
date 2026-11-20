@@ -184,6 +184,9 @@ import * as ServerConfig from "../../config.ts";
 import * as PortScanner from "../../preview/PortScanner.ts";
 import * as ProcessRunner from "../../processRunner.ts";
 import * as ServerSettings from "../../serverSettings.ts";
+import { AgentLauncherPolicy } from "@t3tools/provider-core/server/AgentLauncherPolicy";
+import type { AgentLauncherSettings } from "@t3tools/contracts/settings";
+import { AgentLaunchUnsupportedError, resolveAgentLaunch } from "../../provider/AgentLauncher.ts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
 import { signalProcessGroup } from "@t3tools/provider-core/server/processGroup";
@@ -716,6 +719,7 @@ export type ClaudeAgentSdkQueryOptions = Omit<
 
 export interface ClaudeAgentSdkQueryOpenInput {
   readonly resume?: true;
+  readonly launcherSettings?: AgentLauncherSettings;
   readonly options: ClaudeAgentSdkQueryOptions;
   readonly threadId: ThreadId;
   readonly providerSessionId: OrchestrationV2ProviderSession["id"];
@@ -1576,12 +1580,26 @@ export const layerQueryRunner: Layer.Layer<
       };
       // The SDK can prepend a scope wrapper to native binaries; script entries run through node.
       const binaryPath = queryOptions.pathToClaudeCodeExecutable;
+      const agentLaunch = resolveAgentLaunch(
+        {
+          agent: "claude",
+          executable: binaryPath ?? "claude",
+          args: [],
+          biliCompatibility: { supported: true },
+        },
+        input.launcherSettings ?? { launcher: "native", biliBinaryPath: "bili" },
+      );
+      if (agentLaunch._tag === "Unsupported")
+        return yield* Effect.die(new AgentLaunchUnsupportedError({ message: agentLaunch.message }));
+      const viaBili = agentLaunch.launch.command !== (binaryPath ?? "claude");
       const launch =
-        binaryPath === undefined || CLAUDE_SCRIPT_EXTENSIONS.some((ext) => binaryPath.endsWith(ext))
+        !viaBili &&
+        (binaryPath === undefined ||
+          CLAUDE_SCRIPT_EXTENSIONS.some((ext) => binaryPath.endsWith(ext)))
           ? undefined
           : yield* agentScope.wrap({
-              command: binaryPath,
-              args: [],
+              command: agentLaunch.launch.command,
+              args: agentLaunch.launch.args,
               name: "claude",
               threadId: input.threadId,
               env: queryOptions.env,
@@ -13131,10 +13149,14 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const resolvedTurnCwd = yield* fileSystem
             .realPath(turnInput.runtimePolicy.cwd ?? ".")
             .pipe(Effect.orElseSucceed(() => turnInput.runtimePolicy.cwd));
+          const launcherSettings = yield* Effect.serviceOption(AgentLauncherPolicy);
           const openQueryRuntime = queryRunner.open({
             threadId: turnInput.threadId,
             providerSessionId: input.providerSessionId,
             options: queryOptions,
+            ...(Option.isSome(launcherSettings)
+              ? { launcherSettings: launcherSettings.value }
+              : {}),
             ...(turnInput.resume ? { resume: true } : {}),
           });
           // The SDK spawns the CLI per turn, so only the open waits for a provider update.

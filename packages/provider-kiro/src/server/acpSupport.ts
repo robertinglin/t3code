@@ -4,9 +4,10 @@ import type { KiroSettings } from "../settings.ts";
 import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import type * as Scope from "effect/Scope";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import type * as EffectAcpErrors from "effect-acp/errors";
+import * as EffectAcpErrors from "effect-acp/errors";
 
 import {
   acpPermissionDisposition,
@@ -14,6 +15,10 @@ import {
   type AcpRuntimePolicy,
 } from "@t3tools/provider-acp/server/clientPolicy";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
 
 /**
  * Kiro's default engine is a v2 server this driver does not speak, so V3 is
@@ -141,10 +146,41 @@ export const makeKiroAcpRuntime = Effect.fn("KiroAcpSupport.makeKiroAcpRuntime")
   ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom | Scope.Scope
 > {
   const { settings, environment, ...runtimeOptions } = input;
+  const spawn = buildKiroAcpSpawnInput(settings, input.cwd, environment);
+  const launcherPolicy = Option.getOrUndefined(yield* Effect.serviceOption(AgentLauncherPolicy));
+  const launch = resolveAgentLaunch(
+    {
+      agent: "kiro",
+      executable: spawn.command,
+      args: spawn.args,
+      ...(spawn.cwd === undefined ? {} : { cwd: spawn.cwd }),
+      ...(spawn.env === undefined ? {} : { env: spawn.env }),
+      biliCompatibility: {
+        supported: false,
+        reason: "The installed bili command does not list a Kiro launcher.",
+      },
+    },
+    launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+  );
+  if (launch._tag === "Unsupported") {
+    return yield* new EffectAcpErrors.AcpTransportError({
+      detail: launch.message,
+      cause: launch.message,
+    });
+  }
+  const resolvedSpawn =
+    launch.launch.command === spawn.command
+      ? spawn
+      : {
+          command: launch.launch.command,
+          args: [...launch.launch.args],
+          ...(launch.launch.cwd === undefined ? {} : { cwd: launch.launch.cwd }),
+          ...(launch.launch.env === undefined ? {} : { env: launch.launch.env }),
+        };
   const context = yield* Layer.build(
     AcpSessionRuntime.layer({
       ...runtimeOptions,
-      spawn: buildKiroAcpSpawnInput(settings, input.cwd, environment),
+      spawn: resolvedSpawn,
     }),
   );
   return yield* Effect.service(AcpSessionRuntime.AcpSessionRuntime).pipe(Effect.provide(context));

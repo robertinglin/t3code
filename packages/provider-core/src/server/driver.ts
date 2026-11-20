@@ -45,6 +45,7 @@ export interface ProviderInstance {
   readonly displayName: string | undefined;
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
+  readonly agentLauncher?: "native" | "bili";
   readonly snapshot: ManagedServerProvider;
   readonly snapshotForCwd?: (
     cwd: string,

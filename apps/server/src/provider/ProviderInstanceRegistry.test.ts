@@ -874,6 +874,7 @@ describe("ProviderInstanceRegistry — multi-instance codex slice", () => {
           [codexId]: {
             driver: ProviderDriverKind.make("codex"),
             enabled: false,
+            agentLauncher: "bili",
             config: makeCodexConfig({}),
           },
           [ghostId]: {
@@ -892,6 +893,7 @@ describe("ProviderInstanceRegistry — multi-instance codex slice", () => {
         const instances = yield* registry.listInstances;
         expect(instances).toHaveLength(1);
         expect(instances[0]!.instanceId).toBe(codexId);
+        expect(instances[0]!.agentLauncher).toBe("bili");
 
         const unavailable = yield* registry.listUnavailable;
         expect(unavailable).toHaveLength(1);

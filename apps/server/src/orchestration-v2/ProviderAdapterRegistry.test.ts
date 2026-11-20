@@ -126,6 +126,61 @@ it.effect("refuses a session only when a fresh probe still rates the version bro
   }),
 );
 
+const openWithBiliOverride = (driverKind: ProviderDriverKind) =>
+  Effect.gen(function* () {
+    const instanceId = ProviderInstanceId.make(`${driverKind}_bili`);
+    const reachedAdapter = new ProviderAdapter.ProviderAdapterOpenSessionError({
+      driver: driverKind,
+      providerSessionId: ProviderSessionId.make("bili-session"),
+      cause: "reached adapter",
+    });
+    const instance = {
+      ...makeInstance(instanceId, {
+        ...makeAdapter(instanceId),
+        openSession: () => Effect.fail(reachedAdapter),
+      }),
+      driverKind,
+      agentLauncher: "bili" as const,
+    };
+    const registry = yield* Effect.service(ProviderAdapterRegistry.ProviderAdapterRegistryV2).pipe(
+      Effect.provide(
+        ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
+          Layer.provide(
+            Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
+              getInstance: (id) => Effect.succeed(id === instanceId ? instance : undefined),
+              listInstances: Effect.succeed([instance]),
+            }),
+          ),
+        ),
+      ),
+    );
+    const adapter = yield* registry.get(instanceId);
+    const error = yield* adapter
+      .openSession({
+        threadId: ThreadId.make("bili-thread"),
+        providerSessionId: ProviderSessionId.make("bili-session"),
+        modelSelection: { instanceId, model: "test-model" },
+        runtimePolicy: {
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: "/workspace",
+        },
+      })
+      .pipe(Effect.flip);
+    assert.instanceOf(error, ProviderAdapter.ProviderAdapterOpenSessionError);
+    return { error, reachedAdapter };
+  });
+
+it.effect("applies a provider instance bili override before the compatibility guard", () =>
+  Effect.gen(function* () {
+    const cursor = yield* openWithBiliOverride(ProviderDriverKind.make("cursor"));
+    assert.instanceOf(cursor.error.cause, ProviderSetupError);
+
+    const claude = yield* openWithBiliOverride(ProviderDriverKind.make("claudeAgent"));
+    assert.strictEqual(claude.error, claude.reachedAdapter);
+  }),
+);
+
 it.effect(
   "blocks a new session while another instance changes their shared provider credentials",
   () =>

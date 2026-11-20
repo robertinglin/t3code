@@ -22,6 +22,9 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Semaphore from "effect/Semaphore";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
@@ -63,6 +66,7 @@ import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
 import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
 import * as AcpRegistryAuth from "./auth.ts";
 import * as AcpRegistryAuthenticationState from "./authenticationState.ts";
+import { checkAcpRegistryUsageLimits } from "./usageLimits.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
@@ -601,6 +605,7 @@ export const checkAcpRegistryProviderReadiness = Effect.fn(
 export type AcpRegistryDriverEnv =
   | AcpRegistryAdapterV2DriverEnv
   | Digest.Digest
+  | HttpClient.HttpClient
   | ProviderHost.ProviderHost;
 
 export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryDriverEnv> = {
@@ -637,6 +642,9 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const hostEnvironment = yield* HostProcess.Environment;
     const host = yield* ProviderHost.ProviderHost;
+    const httpClient = yield* HttpClient.HttpClient;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
     const continuationIdentity = defaultProviderContinuationIdentity({
       driverKind: DRIVER_KIND,
       instanceId,
@@ -734,17 +742,34 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     });
     // A local executable's version comes only from probing it, so readiness checks reuse the last report.
     const reportedLocalVersion = yield* Ref.make<string | null>(null);
-    const checkProvider = checkAcpRegistryProviderReadiness(readinessInput).pipe(
-      Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
-      Effect.flatMap((provider) =>
-        Ref.get(reportedLocalVersion).pipe(
-          Effect.map((version) =>
-            provider.installed && provider.version === null && version !== null
-              ? { ...provider, version }
-              : provider,
+    const checkUsageLimits = checkAcpRegistryUsageLimits({
+      agentId: effectiveConfig.agentId,
+      environment: processEnvironment,
+    }).pipe(
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, pathService),
+      Effect.annotateLogs({ providerInstanceId: instanceId }),
+    );
+    const checkProvider = Effect.all(
+      {
+        provider: checkAcpRegistryProviderReadiness(readinessInput).pipe(
+          Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
+          Effect.flatMap((provider) =>
+            Ref.get(reportedLocalVersion).pipe(
+              Effect.map((version) =>
+                provider.installed && provider.version === null && version !== null
+                  ? { ...provider, version }
+                  : provider,
+              ),
+            ),
           ),
         ),
-      ),
+        usageLimits: checkUsageLimits,
+      },
+      { concurrency: "unbounded" },
+    ).pipe(
+      Effect.map(({ provider, usageLimits }) => ({ ...provider, usageLimits })),
       Effect.flatMap(withLiveRuntimeState),
     );
     const enrichProvider = checkAcpRegistryProviderStatus(
@@ -818,6 +843,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
       // Inspection may fetch the registry when its disk cache is missing; creation must not wait on that.
       initialSnapshot: () => buildInitialAcpRegistrySnapshot(readinessInput),
       checkProvider,
+      checkUsageLimits,
       enrichSnapshot: Effect.fn("enrichSnapshot")(function ({
         snapshot,
         getSnapshot,

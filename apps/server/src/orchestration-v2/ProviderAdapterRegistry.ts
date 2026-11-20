@@ -4,19 +4,27 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type ServerProvider,
 } from "@t3tools/contracts";
+import { BILI_AGENT_COMPATIBILITY, biliAgentIdForDriver } from "@t3tools/contracts/settings";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as ModelManifest from "../provider/ModelManifest.ts";
 import { brokenRuntimeError } from "../provider/providerCompatibility.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import { AgentLauncherPolicy } from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { ProviderAdapterDriverCreateError } from "@t3tools/provider-core/server/adapterDriver";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
 const isProviderSetupError = Schema.is(ProviderSetupError);
+const BILI_SESSION_LAUNCHERS = new Set([
+  "acpRegistry",
+  ...BILI_AGENT_COMPATIBILITY.filter((entry) => entry.supported).map((entry) => entry.id),
+]);
 
 export class ProviderAdapterRegistryLookupError extends Schema.TaggedError<ProviderAdapterRegistryLookupError>()(
   "ProviderAdapterRegistryLookupError",
@@ -71,6 +79,7 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
   Effect.gen(function* () {
     const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
     const manifest = yield* ModelManifest.ModelManifest;
+    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
     return ProviderAdapterRegistryV2.of({
       get: Effect.fn("ProviderAdapterRegistryV2.get")(function (instanceId) {
         return instances.getInstance(instanceId).pipe(
@@ -97,25 +106,48 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
               ...adapter,
               openSession: (input) => {
                 const open = Effect.gen(function* () {
+                  const launcherSettings = yield* Option.match(serverSettings, {
+                    onNone: () =>
+                      Effect.succeed({ launcher: "native" as const, biliBinaryPath: "bili" }),
+                    onSome: (service) =>
+                      service.getSettings.pipe(
+                        Effect.map((settings) => settings.agentLauncher),
+                        Effect.orDie,
+                      ),
+                  });
+                  const effectiveLauncherSettings = {
+                    ...launcherSettings,
+                    launcher: instance.agentLauncher ?? launcherSettings.launcher,
+                  };
+                  if (
+                    effectiveLauncherSettings.launcher === "bili" &&
+                    !BILI_SESSION_LAUNCHERS.has(biliAgentIdForDriver(instance.driverKind))
+                  ) {
+                    return yield* new ProviderSetupError({
+                      instanceId,
+                      operation: "session",
+                      detail: `${String(instance.driverKind)} does not have a verified bili session launcher. T3 Code stopped instead of starting it natively.`,
+                    });
+                  }
                   if (!adapter.checksVersionAtHandshake) {
                     let refused = yield* refuseBroken(yield* instance.snapshot.getSnapshot);
                     // The last probe may predate an update, so look again before refusing.
                     if (refused) refused = yield* refuseBroken(yield* instance.snapshot.refresh);
                     if (refused) return yield* refused;
                   }
-                  if (!auth) return yield* adapter.openSession(input);
-                  const binding = auth.credentialBinding;
-                  const related = binding
-                    ? (yield* instances.listInstances).filter(
-                        (instance) =>
-                          instance.auth?.credentialBinding?.key === binding.key &&
-                          instance.auth.credentialBinding.owner === binding.owner,
-                      )
-                    : [instance];
-                  for (const instance of related) {
+                  const related = auth
+                    ? auth.credentialBinding
+                      ? (yield* instances.listInstances).filter(
+                          (candidate) =>
+                            candidate.auth?.credentialBinding?.key === auth.credentialBinding.key &&
+                            candidate.auth.credentialBinding.owner === auth.credentialBinding.owner,
+                        )
+                      : [instance]
+                    : [];
+                  for (const relatedInstance of related) {
                     if (
-                      instance.auth?.isChangingCredentials &&
-                      (yield* instance.auth.isChangingCredentials)
+                      relatedInstance.auth?.isChangingCredentials &&
+                      (yield* relatedInstance.auth.isChangingCredentials)
                     )
                       return yield* new ProviderSetupError({
                         instanceId,
@@ -132,7 +164,9 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
                   for (const peer of related) {
                     if (peer.auth?.withAccess) admitted = peer.auth.withAccess(admitted);
                   }
-                  return yield* admitted;
+                  return yield* admitted.pipe(
+                    Effect.provideService(AgentLauncherPolicy, effectiveLauncherSettings),
+                  );
                 });
                 return open.pipe(
                   Effect.mapError((cause) =>

@@ -70,6 +70,7 @@ const fixture = Effect.fn("AntigravityUsageTest.fixture")(function* (
     userId?: string;
     userInfoAt?: number;
     missingToken?: boolean;
+    keyringToken?: string;
     authMethod?: "oauth-personal" | "oauth-business" | "gemini-api-key";
     keyringSecret?: string;
     /** Reads the OS keyring instead of `keyringSecret`. */
@@ -119,7 +120,9 @@ const fixture = Effect.fn("AntigravityUsageTest.fixture")(function* (
             : Response.json({}, { status: 403 }),
         );
       }
-      expect(JSON.parse(body)).toEqual(options.missingToken ? {} : { project: "project-id" });
+      expect(JSON.parse(body)).toEqual(
+        options.missingToken && options.keyringToken === undefined ? {} : { project: "project-id" },
+      );
       expect(request.headers["user-agent"]).toMatch(/^antigravity\/hub\/2\.24\.0 /);
       return HttpClientResponse.fromWeb(
         request,
@@ -140,6 +143,9 @@ const fixture = Effect.fn("AntigravityUsageTest.fixture")(function* (
   const usage = yield* makeAntigravityUsageProbe({
     profileDirectory,
     authMethod: options.authMethod ?? "oauth-personal",
+    ...(options.keyringToken === undefined
+      ? {}
+      : { readKeyringToken: Effect.succeed(options.keyringToken) }),
     ...(options.nativeKeyring ? {} : { readKeyringSecret: Effect.succeed(options.keyringSecret) }),
   }).pipe(Effect.provideService(HttpClient.HttpClient, http));
   return { ...usage, requests, writeToken, tokenPath };
@@ -781,6 +787,23 @@ describe("Antigravity subscription limits", () => {
         expect((yield* probe).unavailable?.reason).toBe("unsupported");
         expect(requests).toEqual([]);
       }
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+
+  it.effect("reads quota from a keyring token when acp_token.json is absent", () =>
+    Effect.gen(function* () {
+      const { probe, requests } = yield* fixture({
+        missingToken: true,
+        keyringToken: JSON.stringify({
+          token: { access_token: "access-token" },
+          project_id: "project-id",
+        }),
+        userId: "google-user-1",
+      });
+      const limits = yield* probe;
+      expect(limits.unavailable).toBeUndefined();
+      expect(limits.windows.length).toBeGreaterThan(0);
+      expect(requests.some((req) => req.url.endsWith("/token"))).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 });

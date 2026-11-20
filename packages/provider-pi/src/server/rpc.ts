@@ -14,6 +14,10 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
+import {
   MAX_TOOL_OUTPUT_IMAGES,
   MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH,
 } from "@t3tools/shared/toolOutput";
@@ -214,14 +218,32 @@ export const makePiRpcConnection = Effect.fnUntraced(function* (options: PiRpcSp
   const platform = yield* HostProcess.Platform;
   const scope = yield* Effect.scope;
 
-  const spawnCommand = yield* resolveSpawnCommand(options.command, [...options.args], {
-    env: options.env,
-  }).pipe(Effect.mapError((cause) => new PiRpcError({ operation: "spawn", cause })));
+  const launcherPolicy = Option.getOrUndefined(yield* Effect.serviceOption(AgentLauncherPolicy));
+  const launch = resolveAgentLaunch(
+    {
+      agent: "pi",
+      executable: options.command,
+      args: options.args,
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(options.env === undefined ? {} : { env: options.env }),
+      biliCompatibility: { supported: true },
+    },
+    launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+  );
+  if (launch._tag === "Unsupported") {
+    return yield* new PiRpcError({ operation: "spawn", detail: launch.message });
+  }
+  const spawnOptions = launch.launch.env === undefined ? {} : { env: launch.launch.env };
+  const spawnCommand = yield* resolveSpawnCommand(
+    launch.launch.command,
+    [...launch.launch.args],
+    spawnOptions,
+  ).pipe(Effect.mapError((cause) => new PiRpcError({ operation: "spawn", cause })));
   const child = yield* spawner
     .spawn(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
-        ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-        env: options.env,
+        ...(launch.launch.cwd === undefined ? {} : { cwd: launch.launch.cwd }),
+        ...(launch.launch.env === undefined ? {} : { env: launch.launch.env }),
         extendEnv: false,
         shell: spawnCommand.shell,
         detached: platform !== "win32",

@@ -61,25 +61,17 @@ export function useThreadFindPositionReader({
         (rowId) => {
           const rowIndex = rows.findIndex((row) => row.id === rowId);
           for (const row of rows.slice(Math.max(0, rowIndex))) {
-            if (row.kind !== "turn-fold" && row.kind !== "attempt-fold") {
+            if (row.kind !== "turn-fold") {
               const entry = entryById.get(row.kind === "assistant-meta" ? row.message.id : row.id);
               if (entry && (entry.kind === "message" || entry.kind === "proposed-plan"))
                 return entry.id;
               continue;
             }
             const entry = timelineEntries.find((entry) => {
-              const runId =
-                row.kind === "turn-fold"
-                  ? foldRunIds.get(entry.id)
-                  : entry.kind === "message"
-                    ? entry.message.runId
-                    : entry.kind === "proposed-plan"
-                      ? entry.proposedPlan.runId
-                      : null;
+              const runId = foldRunIds.get(entry.id);
               return (
                 runId === row.runId &&
-                (entry.kind !== "message" || entry.message.role === "assistant") &&
-                (row.kind !== "attempt-fold" || entry.attempt?.id === row.attemptId)
+                (entry.kind !== "message" || entry.message.role === "assistant")
               );
             });
             if (entry && (entry.kind === "message" || entry.kind === "proposed-plan"))

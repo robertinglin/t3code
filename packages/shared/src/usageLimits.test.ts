@@ -1374,6 +1374,20 @@ describe("pooled account columns", () => {
     );
     expect(keys(pool!)).toEqual([["b", "a"]]);
   });
+
+  it("keeps distinct ACP Registry instances in separate pools", () => {
+    const acp = ProviderDriverKind.make("acpRegistry");
+    const pools = collectLimitPools(
+      [
+        { ...account("cline", [window]), driver: acp, displayName: "Cline" },
+        { ...account("glm", [window]), driver: acp, displayName: "GLM Agent" },
+      ],
+      now,
+    );
+    expect(pools).toHaveLength(2);
+    expect(pools.map((pool) => pool.key)).toEqual(["cline", "glm"]);
+    expect(pools.map((pool) => pool.accounts[0]?.displayName)).toEqual(["Cline", "GLM Agent"]);
+  });
 });
 
 describe("/usage-limits", () => {

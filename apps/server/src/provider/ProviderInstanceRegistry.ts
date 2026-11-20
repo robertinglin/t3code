@@ -353,7 +353,10 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
   return {
     kind: "live" as const,
     live: {
-      instance: createResult.success,
+      instance: {
+        ...createResult.success,
+        ...(entry.agentLauncher === undefined ? {} : { agentLauncher: entry.agentLauncher }),
+      },
       scope: childScope,
       entry,
       secrets,

@@ -5,6 +5,16 @@ import * as SqlClient from "effect/sql/SqlClient";
 // Matching settledAt and occurred_at identifies automatic settlements from the decider's shared clock read.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const columns = yield* sql<{ readonly name: string }>`
+    PRAGMA table_info(projection_threads)
+  `;
+
+  if (!columns.some((column) => column.name === "settled_at")) {
+    yield* sql`
+      ALTER TABLE projection_threads
+      ADD COLUMN settled_at TEXT
+    `;
+  }
 
   yield* sql`
     WITH activity_timestamps AS (

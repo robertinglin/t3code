@@ -15,6 +15,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -1002,6 +1003,10 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
         environment: [],
         config: decodeSettings({ agentId: "test-agent" }),
       }).pipe(
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("Usage limits must not make HTTP requests in tests")),
+        ),
         Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
           ...catalogWithInspection({
             status: "ready",
@@ -1119,6 +1124,10 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
         environment: [],
         config: decodeSettings({ agentId: "test-agent" }),
       }).pipe(
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("Usage limits must not make HTTP requests in tests")),
+        ),
         Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
           ...catalogWithInspection({
             status: "ready",

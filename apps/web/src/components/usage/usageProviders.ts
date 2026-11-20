@@ -47,6 +47,16 @@ export const PROVIDER_PRESENTATION = {
     color: "#0866ff",
     driverKind: ProviderDriverKind.make("muse"),
   },
+  clinepass: {
+    label: "ClinePass",
+    color: "#6366f1",
+    driverKind: ProviderDriverKind.make("clinepass"),
+  },
+  zai: {
+    label: "ZAI",
+    color: "#ec4899",
+    driverKind: ProviderDriverKind.make("zai"),
+  },
 } satisfies Record<UsageProviderKind, UsageProviderPresentation>;
 
 export const PROVIDER_ORDER = Object.keys(PROVIDER_PRESENTATION) as UsageProviderKind[];

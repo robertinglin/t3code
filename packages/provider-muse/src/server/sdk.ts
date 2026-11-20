@@ -18,10 +18,11 @@ import * as Schema from "effect/Schema";
 
 export class MuseSdkError extends Schema.TaggedError<MuseSdkError>()("MuseSdkError", {
   operation: Schema.String,
+  detail: Schema.optional(Schema.String),
   cause: Schema.Defect(),
 }) {
   override get message(): string {
-    return `Muse SDK ${this.operation} failed.`;
+    return `Muse SDK ${this.operation} failed${this.detail === undefined ? "." : `: ${this.detail}`}`;
   }
 }
 

@@ -49,6 +49,8 @@ import { toolOutputImages } from "@t3tools/shared/toolOutput";
 import { resolveAttachmentPathById } from "../../attachmentStore.ts";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import { AgentScope } from "@t3tools/shared/AgentScope";
+import { AgentLauncherPolicy } from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -12579,6 +12581,29 @@ describe("codexDynamicToolOutput", () => {
 });
 
 describe("CodexAdapterV2 app-server process", () => {
+  it.effect("runs bili inside the agent scope wrapper", () =>
+    Effect.gen(function* () {
+      const scope = AgentScope.of({
+        ...(yield* AgentScope),
+        wrap: ({ command, args }) =>
+          Effect.succeed({ command: "/bin/sh", args: [command, ...args] }),
+      });
+      const command = yield* CodexAdapterV2.makeCodexAppServerSpawnCommand({
+        command: "/usr/bin/codex",
+        args: ["app-server"],
+      }).pipe(
+        Effect.provideService(AgentScope, scope),
+        Effect.provideService(AgentLauncherPolicy, { launcher: "bili", biliBinaryPath: "bili" }),
+      );
+      assert.strictEqual(command._tag, "StandardCommand");
+      if (command._tag !== "StandardCommand") return;
+      assert.deepStrictEqual(
+        [command.command, ...command.args],
+        ["/bin/sh", "bili", "--bin", "/usr/bin/codex", "codex", "app-server"],
+      );
+    }),
+  );
+
   it.live.skipIf(HostProcess.Platform.defaultValue() === "win32")(
     "stops an app-server that ignores SIGTERM within its kill deadline",
     () =>

@@ -10,5 +10,7 @@ export function providerColors(scheme: "light" | "dark"): Record<UsageProviderKi
     antigravity: "#8c7bd1",
     pi: "#4d9f8a",
     muse: "#0866ff",
+    clinepass: "#6366f1",
+    zai: "#ec4899",
   };
 }

@@ -90,6 +90,13 @@ const compact = (schema: Json, optional: boolean): Json => {
           )
         : compact(value, false);
   }
+  // Gemini rejects non-string enums, so a numeric literal becomes a bound.
+  if (Array.isArray(result.enum) && result.enum.some((value) => typeof value !== "string")) {
+    const { enum: values, ...rest } = result;
+    result = values.every((value) => typeof value === "number")
+      ? { ...rest, minimum: Math.min(...values), maximum: Math.max(...values) }
+      : rest;
+  }
   if (Array.isArray(result.anyOf)) {
     const branches = result.anyOf
       .flatMap((branch) => (isBareAnyOf(branch) ? branch.anyOf : [branch]))
@@ -103,8 +110,8 @@ const compact = (schema: Json, optional: boolean): Json => {
 
 /**
  * The input schema T3 advertises for a tool. Drops JSON noise that every thread pays for:
- * `additionalProperties: true`, safe-integer bounds, nested `anyOf`, JSON-string fallbacks, and
- * the `null` branch of optional properties. A tagged union of objects becomes one object.
+ * `additionalProperties: true`, safe-integer bounds, nested `anyOf`, JSON-string fallbacks,
+ * non-string enums, and the `null` branch of optional properties. A tagged union of objects becomes one object.
  * Decoding still uses the full schema, so each tag's own required fields still apply.
  */
 export const advertisedJsonSchema = (tool: Tool.Any) =>

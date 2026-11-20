@@ -56,6 +56,8 @@ import {
 import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@t3tools/shared/model";
 import { appendGeneratedImageEmbeds } from "@t3tools/shared/generatedImageMarkdown";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { AgentLaunchUnsupportedError, resolveAgentLaunch } from "../../provider/AgentLauncher.ts";
+import { AgentLauncherPolicy } from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { mcpToolResultOutput } from "@t3tools/shared/toolOutput";
 import type {
   ChatAttachment,
@@ -1618,9 +1620,28 @@ export const makeCodexAppServerSpawnCommand = Effect.fn(
   readonly extendEnv?: boolean | undefined;
   readonly threadId?: string | undefined;
 }) {
+  const configuredLauncher = yield* Effect.serviceOption(AgentLauncherPolicy);
+  const launcherSettings = Option.getOrElse(configuredLauncher, () => ({
+    launcher: "native" as const,
+    biliBinaryPath: "bili",
+  }));
+  const resolvedLaunch = resolveAgentLaunch(
+    {
+      agent: "codex",
+      executable: input.command,
+      args: input.args,
+      ...(input.env === undefined ? {} : { env: input.env }),
+      ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+      biliCompatibility: { supported: true },
+    },
+    launcherSettings,
+  );
+  if (resolvedLaunch._tag === "Unsupported")
+    return yield* new AgentLaunchUnsupportedError({ message: resolvedLaunch.message });
+  // bili must wrap the CLI itself; the scope wrapper then wraps bili.
   const launch = yield* (yield* AgentScope).wrap({
-    command: input.command,
-    args: input.args,
+    command: resolvedLaunch.launch.command,
+    args: resolvedLaunch.launch.args,
     name: "codex",
     threadId: input.threadId,
     env: input.env,
@@ -1816,7 +1837,17 @@ export const layerAppServerClientFactory: Layer.Layer<
           ),
           env: environment,
           threadId: input.threadId,
-        }).pipe(Effect.provideService(AgentScope, agentScope));
+        }).pipe(
+          Effect.provideService(AgentScope, agentScope),
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapter.ProviderAdapterOpenSessionError({
+                driver: CODEX_PROVIDER,
+                providerSessionId: input.providerSessionId,
+                cause,
+              }),
+          ),
+        );
         const handle = yield* spawner.spawn(command).pipe(
           Effect.provideService(Scope.Scope, scope),
           Effect.mapError(

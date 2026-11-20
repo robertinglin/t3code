@@ -36,6 +36,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
@@ -43,6 +44,10 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalog.ts";
 import {
   MuseApproval,
@@ -1787,6 +1792,34 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
           threadId: input.threadId,
           env: environment,
         });
+        const launcherPolicy = Option.getOrUndefined(
+          yield* Effect.serviceOption(AgentLauncherPolicy),
+        );
+        const resolvedLaunch = resolveAgentLaunch(
+          {
+            agent: "muse",
+            executable: launch.command,
+            args: launch.args,
+            cwd,
+            env: environment,
+            biliCompatibility: {
+              supported: false,
+              reason: "The installed bili command does not list a Muse launcher.",
+            },
+          },
+          launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+        );
+        if (resolvedLaunch._tag === "Unsupported") {
+          return yield* new ProviderAdapter.ProviderAdapterOpenSessionError({
+            driver: MUSE_PROVIDER,
+            providerSessionId: input.providerSessionId,
+            cause: new MuseSdkError({
+              operation: "spawn",
+              detail: resolvedLaunch.message,
+              cause: resolvedLaunch.message,
+            }),
+          });
+        }
         // Finalizers run in reverse order: reap detached work after closing the host.
         const scopeUnit = launch.unit;
         const stopScope =
@@ -1798,8 +1831,8 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
         const created = yield* Effect.acquireRelease(
           createMuseSdkHostEffect(
             {
-              binaryPath: launch.command,
-              launchArgs: launch.args,
+              binaryPath: resolvedLaunch.launch.command,
+              launchArgs: [...resolvedLaunch.launch.args],
               cwd,
               environment,
               runtimeMode: input.runtimePolicy.runtimeMode,

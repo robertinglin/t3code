@@ -9,7 +9,6 @@ import {
   type EnvironmentId,
   type MessageId,
   type OrchestrationV2TurnItem,
-  type RunAttemptId,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type RunId,
@@ -91,7 +90,6 @@ export interface TimelineRowSharedState {
     | ((input: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => Promise<void>)
     | undefined;
   onToggleTurnFold: (runId: RunId) => void;
-  onToggleAttemptFold: (attemptId: RunAttemptId) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   onFileDownload: (attachment: ChatFileAttachment) => void;
   openPullRequest: (event: MouseEvent<HTMLElement>, url: string) => void;

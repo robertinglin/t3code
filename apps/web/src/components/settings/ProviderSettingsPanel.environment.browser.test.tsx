@@ -469,6 +469,54 @@ describe("EnvironmentProviderSettings routing", () => {
 });
 
 describe("EnvironmentProviderSettings provider list", () => {
+  it("saves a bili launcher override on the selected provider instance", async () => {
+    await setup();
+    await setProviders([provider()]);
+    await using _screen = await render(panel({ targetInstanceId: codexId }));
+
+    await userEvent.click(page.getByRole("combobox", { name: "Agent launcher" }));
+    await userEvent.click(page.getByRole("option", { name: "Billion Context (bili)" }));
+
+    expect(state.mutateProviderInstance).toHaveBeenCalledWith(
+      {
+        operation: "upsert",
+        instanceId: codexId,
+        instance: { driver: ProviderDriverKind.make("codex"), agentLauncher: "bili" },
+      },
+      {},
+    );
+  });
+
+  it("shows bili for a supported ACP Registry agent", async () => {
+    await setup();
+    const instanceId = ProviderInstanceId.make("acpRegistry_antigravity");
+    const instance = {
+      driver: ProviderDriverKind.make("acpRegistry"),
+      config: { agentId: "antigravity" },
+    };
+    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, providerInstances: { [instanceId]: instance } };
+    await setProviders([
+      {
+        ...provider(),
+        instanceId,
+        driver: ProviderDriverKind.make("acpRegistry"),
+      },
+    ]);
+    await using _screen = await render(panel({ targetInstanceId: instanceId }));
+
+    await userEvent.click(page.getByRole("combobox", { name: "Agent launcher" }));
+    await userEvent.click(page.getByRole("option", { name: "Billion Context (bili)" }));
+
+    expect(state.mutateProviderInstance).toHaveBeenCalledWith(
+      {
+        operation: "upsert",
+        instanceId,
+        instance: { ...instance, agentLauncher: "bili" },
+      },
+      {},
+    );
+  });
+
   it("selects a provider when its row is clicked near the edge", async () => {
     await setup();
     await setProviders([provider()]);

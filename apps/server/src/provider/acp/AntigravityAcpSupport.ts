@@ -14,6 +14,7 @@ import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as Option from "effect/Option";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
@@ -28,6 +29,10 @@ import {
   type AcpRuntimePolicy,
 } from "@t3tools/provider-acp/server/clientPolicy";
 import type { AcpSessionModeState } from "@t3tools/provider-acp/server/runtimeModel";
+import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import packageJson from "../../../package.json" with { type: "json" };
 import { normalizeAntigravitySessionUpdate } from "./AntigravityProtocol.ts";
 
@@ -116,9 +121,37 @@ export const makeAntigravityAcpRuntime = Effect.fn("makeAntigravityAcpRuntime")(
   EffectAcpErrors.AcpError,
   SecureRandom.SecureRandom | Scope.Scope
 > {
+  const launcherPolicy = Option.getOrUndefined(yield* Effect.serviceOption(AgentLauncherPolicy));
+  const launch = resolveAgentLaunch(
+    {
+      agent: "antigravity",
+      executable: input.spawn.command,
+      args: input.spawn.args,
+      ...(input.spawn.cwd === undefined ? {} : { cwd: input.spawn.cwd }),
+      ...(input.spawn.env === undefined ? {} : { env: input.spawn.env }),
+      biliCompatibility: { supported: true },
+    },
+    launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+  );
+  if (launch._tag === "Unsupported") {
+    return yield* new EffectAcpErrors.AcpTransportError({
+      detail: launch.message,
+      cause: launch.message,
+    });
+  }
+  const spawn =
+    launch.launch.command === input.spawn.command
+      ? input.spawn
+      : {
+          command: launch.launch.command,
+          args: [...launch.launch.args],
+          ...(launch.launch.cwd === undefined ? {} : { cwd: launch.launch.cwd }),
+          ...(launch.launch.env === undefined ? {} : { env: launch.launch.env }),
+        };
   const context = yield* Layer.build(
     AcpSessionRuntime.layer({
       ...input,
+      spawn,
       authMethodId: input.authMethod ?? "oauth-personal",
       authenticateEagerly: true,
       resumeMethod: "resume",

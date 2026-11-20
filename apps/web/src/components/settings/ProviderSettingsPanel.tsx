@@ -987,6 +987,7 @@ export function EnvironmentProviderSettings({
         key={row.instanceId}
         environmentId={environmentId}
         environmentLabel={environmentLabel}
+        defaultAgentLauncher={settings.agentLauncher.launcher}
         instanceId={row.instanceId}
         driver={row.driver}
         explicitInstance={row.explicitInstance}
@@ -1290,6 +1291,7 @@ const NO_MODELS: ReadonlyArray<string> = [];
 function ProviderInstanceRow({
   environmentId,
   environmentLabel,
+  defaultAgentLauncher,
   instanceId,
   driver,
   explicitInstance,
@@ -1310,6 +1312,7 @@ function ProviderInstanceRow({
 }: {
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
+  readonly defaultAgentLauncher: "native" | "bili";
   readonly instanceId: ProviderInstanceId;
   readonly driver: ProviderDriverKind;
   readonly explicitInstance: ProviderInstanceConfig | undefined;
@@ -1379,6 +1382,7 @@ function ProviderInstanceRow({
       }
       instanceId={instanceId}
       instance={instance}
+      defaultAgentLauncher={defaultAgentLauncher}
       driverOption={driverOption}
       liveProvider={liveProvider}
       mode={mode}

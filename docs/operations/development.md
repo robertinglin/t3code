@@ -45,8 +45,9 @@ the two forges; in text that reaches GitHub, use the GitHub number.
 
 ## Choosing a dev process
 
-Use `vp run dev` for server and web, or `vp run dev:desktop` for the Electron client.
-`dev:server` and `dev:web` start those processes separately.
+Use `npm run dev` to start the Electron desktop app with its taskbar integration. It stores
+development data in the checkout's `.data` directory. Use `npm run dev:browser` for the browser
+server and pairing URL. `dev:desktop`, `dev:server`, and `dev:web` remain available as direct modes.
 See the [mobile README](../../apps/mobile/README.md) for native builds and Metro.
 
 Flags go directly after the task name, for example `vp run dev --home-dir /tmp/t3code-dev`.

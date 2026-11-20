@@ -30,6 +30,10 @@ import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
+import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { signalProcessGroup } from "@t3tools/provider-core/server/processGroup";
 import { isWindowsCommandNotFound } from "@t3tools/provider-core/server/snapshotProbe";
 import * as OpenCodeServerLedger from "./OpenCodeServerLedger.ts";
@@ -599,9 +603,27 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         input.environment,
       );
     const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
+    const launcherPolicy = Option.getOrUndefined(yield* Effect.serviceOption(AgentLauncherPolicy));
+    const resolvedLaunch = resolveAgentLaunch(
+      {
+        agent: "opencode",
+        executable: input.binaryPath,
+        args,
+        ...(input.environment === undefined ? {} : { env: input.environment }),
+        biliCompatibility: { supported: true },
+      },
+      launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+    );
+    if (resolvedLaunch._tag === "Unsupported") {
+      return yield* new OpenCodeRuntimeError({
+        operation: "spawn",
+        detail: resolvedLaunch.message,
+      });
+    }
+    // bili must wrap the CLI itself; the scope wrapper then wraps bili.
     const launch = yield* agentScope.wrap({
-      command: input.binaryPath,
-      args,
+      command: resolvedLaunch.launch.command,
+      args: resolvedLaunch.launch.args,
       name: "opencode",
       env: input.environment,
       shared: true,

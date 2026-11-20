@@ -17,6 +17,10 @@ import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
 
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+import {
+  AgentLauncherPolicy,
+  resolveAgentLaunch,
+} from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { collectSessionConfigOptionValues } from "@t3tools/provider-acp/server/runtimeModel";
 import {
   acpPermissionDisposition,
@@ -356,15 +360,46 @@ export const makeFxAcpRuntime = Effect.fn("makeFxAcpRuntime")(function* (
   ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom | Scope.Scope
 > {
   const { fxSettings, environment, ...runtimeOptions } = input;
+  const spawn = {
+    command: fxSettings.binaryPath || "fx",
+    args: ["acp"],
+    cwd: input.cwd,
+    env: { ...environment },
+  };
+  const launcherPolicy = Option.getOrUndefined(yield* Effect.serviceOption(AgentLauncherPolicy));
+  const launch = resolveAgentLaunch(
+    {
+      agent: "fx",
+      executable: spawn.command,
+      args: spawn.args,
+      cwd: spawn.cwd,
+      env: spawn.env,
+      biliCompatibility: {
+        supported: false,
+        reason: "The installed bili command does not list an fx launcher.",
+      },
+    },
+    launcherPolicy ?? { launcher: "native", biliBinaryPath: "bili" },
+  );
+  if (launch._tag === "Unsupported") {
+    return yield* new EffectAcpErrors.AcpTransportError({
+      detail: launch.message,
+      cause: launch.message,
+    });
+  }
+  const resolvedSpawn =
+    launch.launch.command === spawn.command
+      ? spawn
+      : {
+          command: launch.launch.command,
+          args: [...launch.launch.args],
+          ...(launch.launch.cwd === undefined ? {} : { cwd: launch.launch.cwd }),
+          ...(launch.launch.env === undefined ? {} : { env: launch.launch.env }),
+        };
   const context = yield* Layer.build(
     AcpSessionRuntime.layer({
       ...runtimeOptions,
-      spawn: {
-        command: fxSettings.binaryPath || "fx",
-        args: ["acp"],
-        cwd: input.cwd,
-        env: { ...environment },
-      },
+      spawn: resolvedSpawn,
       cancelBehavior: FX_ACP_CANCEL_BEHAVIOR,
     }),
   );

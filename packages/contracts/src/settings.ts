@@ -68,6 +68,60 @@ export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"])
 export type TimestampFormat = typeof TimestampFormat.Type;
 const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
 
+export const AgentLauncherSettings = Schema.Struct({
+  launcher: Schema.Literals(["native", "bili"]).pipe(
+    Schema.withDecodingDefault(Effect.succeed("native" as const)),
+  ),
+  biliBinaryPath: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("bili"))),
+});
+export type AgentLauncherSettings = typeof AgentLauncherSettings.Type;
+
+export const BILI_AGENT_COMPATIBILITY = [
+  { id: "codex", label: "Codex", supported: true },
+  { id: "claude", label: "Claude Code", supported: true },
+  { id: "cline", label: "Cline", supported: true },
+  { id: "glm-acp-agent", label: "GLM ACP Agent", supported: true },
+  { id: "antigravity", label: "Antigravity", supported: true },
+  { id: "opencode", label: "OpenCode", supported: true },
+  { id: "pi", label: "Pi", supported: true },
+  {
+    id: "kiro",
+    label: "Kiro",
+    supported: false,
+    reason: "The installed bili command does not list a Kiro launcher.",
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    supported: false,
+    reason: "T3 connects through Cursor's SDK and does not launch a local Cursor CLI.",
+  },
+  {
+    id: "grok",
+    label: "Grok",
+    supported: false,
+    reason: "The installed bili command does not list a Grok launcher.",
+  },
+  {
+    id: "muse",
+    label: "Muse Code",
+    supported: false,
+    reason: "The installed bili command does not list a Muse launcher.",
+  },
+  {
+    id: "fx",
+    label: "fx",
+    supported: false,
+    reason: "The installed bili command does not list an fx launcher.",
+  },
+] as const;
+
+// Driver kinds that differ from bili's launcher name.
+const BILI_AGENT_ID_BY_DRIVER: Readonly<Record<string, string>> = { claudeAgent: "claude" };
+
+export const biliAgentIdForDriver = (driver: string): string =>
+  BILI_AGENT_ID_BY_DRIVER[driver] ?? driver;
+
 export const DiffLayout = Schema.Literals(["stacked", "split"]);
 export type DiffLayout = typeof DiffLayout.Type;
 const DEFAULT_DIFF_LAYOUT: DiffLayout = "stacked";
@@ -1364,6 +1418,9 @@ export const CloudSpeechCredentials = Schema.Struct({
 });
 
 export const ServerSettings = Schema.Struct({
+  agentLauncher: AgentLauncherSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(AgentLauncherSettings)({}))),
+  ),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
@@ -1804,6 +1861,7 @@ const ModelSelectionPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  agentLauncher: Schema.optionalKey(AgentLauncherSettings),
   setModelFavorites: Schema.optionalKey(
     Schema.Array(Schema.Struct({ ...ModelFavorite.fields, favorite: Schema.Boolean })),
   ),

@@ -32,6 +32,7 @@ import {
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
+import { BILI_AGENT_COMPATIBILITY, biliAgentIdForDriver } from "@t3tools/contracts/settings";
 
 import {
   type CustomModelDefinition,
@@ -44,6 +45,7 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { DraftInput } from "../ui/draft-input";
 import { SecretSourceInput, type SecretSource } from "./SecretSourceInput";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
@@ -706,6 +708,7 @@ interface ProjectOverrideControl {
 interface ProviderInstanceCardProps {
   readonly instanceId: ProviderInstanceId;
   readonly instance: ProviderInstanceConfig;
+  readonly defaultAgentLauncher: "native" | "bili";
   readonly driverOption: ProviderClientDefinition | undefined;
   readonly liveProvider: ServerProvider | undefined;
   readonly mode: "list" | "editor";
@@ -780,6 +783,7 @@ function useCustomModelSaves(
 export function ProviderInstanceCard({
   instanceId,
   instance,
+  defaultAgentLauncher,
   driverOption,
   liveProvider,
   mode,
@@ -956,6 +960,19 @@ export function ProviderInstanceCard({
         : (rest as ProviderInstanceConfig),
     );
   };
+  const providerConfig = instance.config;
+  const registryAgentId =
+    instance.driver === "acpRegistry" &&
+    typeof providerConfig === "object" &&
+    providerConfig !== null &&
+    "agentId" in providerConfig &&
+    typeof providerConfig.agentId === "string"
+      ? providerConfig.agentId.toLowerCase()
+      : undefined;
+  const biliProviderId = registryAgentId ?? biliAgentIdForDriver(instance.driver);
+  const biliCompatible = BILI_AGENT_COMPATIBILITY.some(
+    (entry) => entry.id === biliProviderId && entry.supported,
+  );
   const environmentFields = driverOption?.environmentFields ?? [];
   const environmentFieldNames = new Set(environmentFields.map((field) => field.name));
   const genericEnvironment = providerEnvironmentWithoutNames(
@@ -1390,6 +1407,44 @@ export function ProviderInstanceCard({
           }
         />
       </SettingsSection>
+
+      {biliCompatible ? (
+        <SettingsSection title="Agent launcher">
+          <SettingsRow
+            title="Launcher"
+            description="Choose how this provider starts. The server default follows the Agent launcher setting."
+            control={
+              <Select
+                value={instance.agentLauncher ?? "default"}
+                onValueChange={(value) => {
+                  if (value === "default") {
+                    const { agentLauncher: _omit, ...rest } = instance;
+                    onUpdate(rest);
+                  } else if (value === "native" || value === "bili") {
+                    onUpdate({ ...instance, agentLauncher: value });
+                  }
+                }}
+                disabled={readOnly || !canWriteSettings}
+              >
+                <SelectTrigger size="sm" className="w-full sm:w-52" aria-label="Agent launcher">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value="default">
+                    {`Server default (${defaultAgentLauncher === "bili" ? "bili" : "Native"})`}
+                  </SelectItem>
+                  <SelectItem hideIndicator value="native">
+                    Native
+                  </SelectItem>
+                  <SelectItem hideIndicator value="bili">
+                    Billion Context (bili)
+                  </SelectItem>
+                </SelectPopup>
+              </Select>
+            }
+          />
+        </SettingsSection>
+      ) : null}
 
       {setup || environmentFields.length > 0 ? (
         <SettingsSection title={gt("Setup")}>

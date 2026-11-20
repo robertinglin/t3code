@@ -12,6 +12,8 @@ import {
   ClientSettingsPatch,
   ClientServerSettingsPatch,
   ClaudeSettings,
+  AgentLauncherSettings,
+  BILI_AGENT_COMPATIBILITY,
   DEFAULT_SERVER_SETTINGS,
   globalIdleCompaction,
   idleCompactionPatch,
@@ -42,6 +44,46 @@ const decodeClientServerSettingsPatch = Schema.decodeUnknownSync(ClientServerSet
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+const decodeAgentLauncherSettings = Schema.decodeUnknownSync(AgentLauncherSettings);
+
+describe("agent launcher settings", () => {
+  it("lists Cline as bili-compatible", () => {
+    expect(BILI_AGENT_COMPATIBILITY.find((entry) => entry.id === "cline")).toEqual({
+      id: "cline",
+      label: "Cline",
+      supported: true,
+    });
+  });
+
+  it("lists the GLM ACP agent as bili-compatible", () => {
+    expect(BILI_AGENT_COMPATIBILITY.find((entry) => entry.id === "glm-acp-agent")).toEqual({
+      id: "glm-acp-agent",
+      label: "GLM ACP Agent",
+      supported: true,
+    });
+  });
+
+  it("defaults to native launch and the bili executable name", () => {
+    expect(decodeServerSettings({}).agentLauncher).toEqual({
+      launcher: "native",
+      biliBinaryPath: "bili",
+    });
+    expect(decodeAgentLauncherSettings({})).toEqual({
+      launcher: "native",
+      biliBinaryPath: "bili",
+    });
+  });
+
+  it("persists the selected launcher and custom bili executable", () => {
+    const settings = decodeServerSettings({
+      agentLauncher: { launcher: "bili", biliBinaryPath: "/opt/bin/bili" },
+    });
+    expect(decodeServerSettings(encodeServerSettings(settings)).agentLauncher).toEqual({
+      launcher: "bili",
+      biliBinaryPath: "/opt/bin/bili",
+    });
+  });
+});
 
 it("drops theme defaults from a client's settings patch", () => {
   expect(
