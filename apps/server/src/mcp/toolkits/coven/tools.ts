@@ -1,4 +1,4 @@
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import { OrchestratorMcpFailure, OrchestratorMcpModelOption } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
 
@@ -254,6 +254,13 @@ const CovenReportToLeaderTool = Tool.make("coven_report_to_leader", {
   .annotate(Tool.Destructive, false)
   .annotate(Tool.OpenWorld, false);
 
+const CovenModelWarnings = Schema.Array(
+  Schema.Struct({ path: Schema.String, message: Schema.String }),
+).annotate({
+  description:
+    "Candidates naming a provider, model, option or option value that doesn't exist. The draft still saves; fix these before telling the user it's ready.",
+});
+
 const CovenBuilderProposePatchTool = Tool.make("coven_builder_propose_patch", {
   description:
     "Coven builder threads only: replace the coven draft with a complete new definition file. T3 validates it, and the user sees it in the editor and saves it.",
@@ -267,6 +274,7 @@ const CovenBuilderProposePatchTool = Tool.make("coven_builder_propose_patch", {
     version: Schema.Int,
     issues: Schema.Array(Schema.Struct({ path: Schema.String, message: Schema.String })),
     currentSource: Schema.optional(Schema.String),
+    warnings: Schema.optional(CovenModelWarnings),
   }),
   failure: OrchestratorMcpFailure,
   failureMode: "return",
@@ -279,13 +287,22 @@ const CovenBuilderProposePatchTool = Tool.make("coven_builder_propose_patch", {
 
 const CovenBuilderReadDraftTool = Tool.make("coven_builder_read_draft", {
   description:
-    "Coven builder threads only: the current draft file, its version, its validation problems, and the providers and models you can use.",
+    "Coven builder threads only: the current draft file, its version, its validation problems, warnings about models or options the draft names that don't exist, and the providers and models you can use with each model's options (a candidate's `options` maps an option id to one of its values).",
   success: Schema.Struct({
     source: Schema.String,
     version: Schema.Int,
     issues: Schema.Array(Schema.Struct({ path: Schema.String, message: Schema.String })),
+    warnings: CovenModelWarnings,
     providers: Schema.Array(
-      Schema.Struct({ providerInstanceId: Schema.String, models: Schema.Array(Schema.String) }),
+      Schema.Struct({
+        providerInstanceId: Schema.String,
+        models: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            options: Schema.optional(Schema.Array(OrchestratorMcpModelOption)),
+          }),
+        ),
+      }),
     ),
   }),
   failure: OrchestratorMcpFailure,

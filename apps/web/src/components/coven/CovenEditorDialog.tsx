@@ -33,6 +33,7 @@ import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { CovenMergePanel } from "./CovenMergePanel";
+import { describeCovenCandidate, useCovenProviders } from "./useCovenModelCatalog";
 import { covenFailureMessage, isCovenConflict, reportCovenFailure } from "./useCovenActions";
 
 interface IncomingSource {
@@ -363,7 +364,10 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
               />
             ) : parsed.ok ? (
               tab === "roles" ? (
-                <CovenRolesView definition={parsed.definition} />
+                <CovenRolesView
+                  definition={parsed.definition}
+                  environmentId={request.environmentId}
+                />
               ) : (
                 <CovenGovernanceView definition={parsed.definition} />
               )
@@ -418,8 +422,15 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
   );
 }
 
-function CovenRolesView({ definition }: { readonly definition: CovenDefinition }) {
+function CovenRolesView({
+  definition,
+  environmentId,
+}: {
+  readonly definition: CovenDefinition;
+  readonly environmentId: EnvironmentId;
+}) {
   const { frontMatter, instructions } = definition;
+  const providers = useCovenProviders(environmentId);
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div>
@@ -442,15 +453,39 @@ function CovenRolesView({ definition }: { readonly definition: CovenDefinition }
               <p className="text-muted-foreground text-xs">{role.responsibility}</p>
             ) : null}
             <ol className="mt-1 flex flex-col gap-0.5 text-xs">
-              {role.candidates.map((candidate, index) => (
-                <li key={`${candidate.providerInstanceId}:${candidate.modelId}`}>
-                  <span className="text-muted-foreground">
-                    {index === 0 ? "Primary" : `Fallback ${index}`}:{" "}
-                  </span>
-                  {candidate.modelId}
-                  <span className="text-muted-foreground"> on {candidate.providerInstanceId}</span>
-                </li>
-              ))}
+              {role.candidates.map((candidate, index) => {
+                const described = describeCovenCandidate(providers, candidate);
+                return (
+                  <li key={`${candidate.providerInstanceId}:${candidate.modelId}`}>
+                    <span className="text-muted-foreground">
+                      {index === 0 ? "Primary" : `Fallback ${index}`}:{" "}
+                    </span>
+                    {described.modelLabel}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      on {candidate.providerInstanceId}
+                    </span>
+                    {described.options.map((option) => (
+                      <span key={option.id} className="text-muted-foreground">
+                        {" · "}
+                        {option.label}: <span className="text-foreground">{option.value}</span>
+                      </span>
+                    ))}
+                    {described.modelKnown ? null : (
+                      <p className="text-destructive-foreground">
+                        This provider doesn't offer that model.
+                      </p>
+                    )}
+                    {described.options
+                      .filter((option) => option.problem !== null)
+                      .map((option) => (
+                        <p key={option.id} className="text-destructive-foreground">
+                          {option.id}: {option.problem}
+                        </p>
+                      ))}
+                  </li>
+                );
+              })}
             </ol>
             {instructions.roles[role.id] ? (
               <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground text-xs">

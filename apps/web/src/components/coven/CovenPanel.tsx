@@ -6,10 +6,8 @@ import type {
   EnvironmentId,
   ScopedThreadRef,
   CovenId,
-  ServerProvider,
 } from "@t3tools/contracts";
 import { parseCovenSource } from "@t3tools/shared/covenDefinition";
-import { useAtomValue } from "@effect/atom-react";
 import {
   ChevronDownIcon,
   EllipsisIcon,
@@ -24,18 +22,17 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { cn } from "~/lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useThreadShell } from "../../state/entities";
-import { useEnvironmentProviders, usePrimaryEnvironmentId } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
-import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
-import { getDisplayModelName } from "../chat/providerIconUtils";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { Textarea } from "../ui/textarea";
 import { BuilderDraftPanel, useBuilderDraft } from "./CovenBuilderDraft";
 import { openCovenEditor } from "./CovenEditorDialog";
+import { describeCovenCandidate, useCovenProviders } from "./useCovenModelCatalog";
 import { CovenAvatar, MemberCard, MemberDetail, type ModelLabeler, VoteBadge } from "./CovenMember";
 import { CovenPicker, NO_COVEN } from "./CovenPicker";
 import {
@@ -54,7 +51,6 @@ import { isCovenRunActive, reportCovenFailure, useCovenActions } from "./useCove
 
 const BUILDER_PROMPT = "Help me build a new coven. Ask what it should do if it is not clear.";
 const RECENT_EVENT_COUNT = 3;
-const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 
 /** The coven bound to a thread, as a cast of members you can open up one by one. */
 export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
@@ -633,15 +629,7 @@ function useCovenDefinition(
 
 /** Turns a provider instance and model slug into the name the model picker shows. */
 function useModelLabeler(environmentId: EnvironmentId): ModelLabeler {
-  const providersByEnvironment = useEnvironmentProviders();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const primaryProviders = useAtomValue(primaryServerProvidersAtom);
-  const providers =
-    providersByEnvironment.get(environmentId) ??
-    (environmentId === primaryEnvironmentId ? primaryProviders : EMPTY_PROVIDERS);
-  return (providerInstanceId, modelId) => {
-    const provider = providers.find((entry) => entry.instanceId === providerInstanceId);
-    const model = provider?.models.find((entry) => entry.slug === modelId);
-    return model ? getDisplayModelName(model) : modelId;
-  };
+  const providers = useCovenProviders(environmentId);
+  return (providerInstanceId, modelId) =>
+    describeCovenCandidate(providers, { providerInstanceId, modelId }).modelLabel;
 }

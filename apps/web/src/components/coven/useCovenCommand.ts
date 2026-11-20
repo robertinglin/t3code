@@ -77,9 +77,18 @@ export function useCovenCommand(input: {
   readonly currentModel: () => ModelSelection | undefined;
   /** Set for a new thread that hasn't been sent yet: its first turn runs on the composer's model. */
   readonly selectComposerModel: ((instanceId: ProviderInstanceId, model: string) => void) | null;
+  /** Puts the cursor back in the composer; opening the panel re-renders the layout and drops it. */
+  readonly focusComposer: () => void;
 }): (text: string) => boolean {
-  const { environmentId, threadId, projectId, runtimeMode, currentModel, selectComposerModel } =
-    input;
+  const {
+    environmentId,
+    threadId,
+    projectId,
+    runtimeMode,
+    currentModel,
+    selectComposerModel,
+    focusComposer,
+  } = input;
   const covens = useEnvironmentQuery(serverEnvironment.covensLive({ environmentId, input: {} }))
     .data?.covens;
   const threadCoven = useEnvironmentQuery(
@@ -190,6 +199,8 @@ export function useCovenCommand(input: {
   const openPanel = () => {
     if (threadId === null) return;
     useRightPanelStore.getState().open(scopeThreadRef(environmentId, threadId), "coven");
+    // The panel mounts over the next frames; restore the composer once it has.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(focusComposer));
   };
 
   const change = async (coven: CovenSummary) => {

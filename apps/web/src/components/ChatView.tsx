@@ -2996,6 +2996,7 @@ export default function ChatView(props: ChatViewProps) {
     runtimeMode,
     currentModel: () => composerRef.current?.getSendContext().selectedModelSelection,
     selectComposerModel: routeKind === "draft" ? onProviderModelSelectStable : null,
+    focusComposer: () => composerRef.current?.focusAtEnd(),
   });
   const { onSend } = useComposerSend({
     environmentId,

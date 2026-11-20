@@ -3,6 +3,7 @@ import {
   OrchestratorMcpTargetOptions,
   type CovenDefinition,
   type CovenGateRound,
+  type OrchestratorMcpProviderCapability,
   type ThreadId,
 } from "@t3tools/contracts";
 import { parseCovenSource } from "@t3tools/shared/covenDefinition";
@@ -25,6 +26,11 @@ import {
   type CovenRunRecord,
   type CovenTaskState,
 } from "../../../coven/covenRunState.ts";
+import {
+  checkCovenModels,
+  covenCandidateRefs,
+  type CovenCatalogProvider,
+} from "../../../coven/covenModelCheck.ts";
 import { buildCovenWorkerTask } from "../../../coven/covenWorkerTask.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -145,6 +151,46 @@ const makeHandlers = (
       return yield* failure("capability_denied", "This isn't a coven builder thread.");
     }
     return { scope, covens, draft };
+  });
+
+  /**
+   * Providers with each model's options. The short list can leave out models the draft names,
+   * so those are looked up by id and merged in.
+   */
+  const builderCatalog = Effect.fn("CovenTools.builderCatalog")(function* (
+    scope: McpInvocationContext.McpInvocationScope,
+    definition: CovenDefinition | null,
+  ) {
+    const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+    const empty = { providers: [] as ReadonlyArray<OrchestratorMcpProviderCapability> };
+    const listed = yield* service.capabilities(scope).pipe(Effect.orElseSucceed(() => empty));
+    const catalog = new Map<string, Map<string, CovenCatalogProvider["models"][number]>>();
+    const add = (providers: ReadonlyArray<OrchestratorMcpProviderCapability>) => {
+      for (const provider of providers) {
+        const models = catalog.get(provider.providerInstanceId) ?? new Map();
+        for (const model of provider.models) {
+          models.set(model.id, {
+            id: model.id,
+            ...(model.options === undefined ? {} : { options: model.options }),
+          });
+        }
+        catalog.set(provider.providerInstanceId, models);
+      }
+    };
+    add(listed.providers);
+    const missing = (definition === null ? [] : covenCandidateRefs(definition)).filter(
+      (ref) => catalog.get(ref.providerInstanceId)?.has(ref.modelId) !== true,
+    );
+    for (const modelId of new Set(missing.map((ref) => ref.modelId))) {
+      const found = yield* service
+        .capabilities(scope, { search: modelId })
+        .pipe(Effect.orElseSucceed(() => empty));
+      add(found.providers);
+    }
+    return [...catalog].map(([providerInstanceId, models]) => ({
+      providerInstanceId,
+      models: [...models.values()],
+    }));
   });
 
   return {
@@ -465,25 +511,20 @@ const makeHandlers = (
       Effect.gen(function* () {
         const { scope, draft } = yield* builderDraft;
         const parsed = parseCovenSource(draft.source);
-        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
-        const capabilities = yield* service
-          .capabilities(scope)
-          .pipe(Effect.orElseSucceed(() => ({ providers: [] as const })));
+        const providers = yield* builderCatalog(scope, parsed.ok ? parsed.definition : null);
         return {
           source: draft.source,
           version: draft.version,
           issues: parsed.ok ? [] : parsed.issues,
-          providers: capabilities.providers.map((provider) => ({
-            providerInstanceId: provider.providerInstanceId,
-            models: provider.models.map((model) => model.id),
-          })),
+          warnings: parsed.ok ? checkCovenModels(parsed.definition, providers) : [],
+          providers,
         };
       }),
     ),
 
     coven_builder_propose_patch: McpToolAccess.actsAsCaller((input) =>
       Effect.gen(function* () {
-        const { covens, draft } = yield* builderDraft;
+        const { scope, covens, draft } = yield* builderDraft;
         const parsed = parseCovenSource(input.source);
         if (!parsed.ok) {
           return { accepted: false, version: draft.version, issues: parsed.issues };
@@ -510,7 +551,13 @@ const makeHandlers = (
             summary: input.summary,
           })
           .pipe(Effect.mapError(toMcpFailure));
-        return { accepted: true, version: updated.version, issues: [] };
+        const providers = yield* builderCatalog(scope, parsed.definition);
+        return {
+          accepted: true,
+          version: updated.version,
+          issues: [],
+          warnings: checkCovenModels(parsed.definition, providers),
+        };
       }),
     ),
   } satisfies McpToolAccess.Handlers<typeof CovenToolkit.tools>;
