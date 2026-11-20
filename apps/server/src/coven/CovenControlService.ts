@@ -879,7 +879,13 @@ const make = Effect.gen(function* () {
           };
         }),
       );
-      if (outcome.closed !== null) {
+      // A voter working a delegated task reports back when that task finishes, and the
+      // leader's turn context then carries the gate's outcome. Messaging the leader now as
+      // well would make it handle the same verdict twice.
+      const voterTaskRunning =
+        scope.kind === "worker" &&
+        run.state.tasks.some((task) => task.id === scope.taskId && task.status === "running");
+      if (outcome.closed !== null && !voterTaskRunning) {
         yield* notifyLeader(
           run,
           outcome.closed === "passed"

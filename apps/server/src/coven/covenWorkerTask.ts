@@ -1,4 +1,4 @@
-import type { CovenDefinition, CovenRole } from "@t3tools/contracts";
+import type { CovenDefinition, CovenGateRound, CovenRole } from "@t3tools/contracts";
 
 import type { CovenRunRecord } from "./covenRunState.ts";
 
@@ -61,6 +61,23 @@ export function covenLeaderNote(input: {
       );
     } else if (status === "awaiting_gate") {
       lines.push(`The run is waiting on a gate: ${run.state.statusReason ?? ""}`);
+    }
+    const latestRounds = new Map<string, CovenGateRound>();
+    for (const round of run.state.gates) {
+      const seen = latestRounds.get(round.gateId);
+      if (seen === undefined || round.round > seen.round) latestRounds.set(round.gateId, round);
+    }
+    for (const round of latestRounds.values()) {
+      lines.push(
+        round.status === "open"
+          ? `Gate ${round.gateId} round ${round.round} is open; votes so far: ${round.votes.map((vote) => `${vote.roleId} ${vote.decision}`).join(", ") || "none"}.`
+          : `Gate ${round.gateId} round ${round.round} ${round.status}.${round.detail ? ` ${round.detail}` : ""}`,
+      );
+    }
+    if (latestRounds.size > 0) {
+      lines.push(
+        "A worker's result that refers to an earlier gate round is already handled; don't act on it again.",
+      );
     }
     if (run.state.summary !== null && status === "running") {
       lines.push(

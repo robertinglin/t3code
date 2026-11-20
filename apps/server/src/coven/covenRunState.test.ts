@@ -6,6 +6,7 @@ import {
 } from "@t3tools/shared/covenDefinition";
 
 import { renderCovenRunDocs } from "./covenRunDocs.ts";
+import { covenLeaderNote } from "./covenWorkerTask.ts";
 import {
   delegationRefusal,
   initialRunState,
@@ -80,6 +81,40 @@ describe("coven run state", () => {
       ],
     };
     expect(delegationRefusal(passed, definition, "builder")).toBeNull();
+  });
+
+  it("tells the leader where each gate stands so late results aren't handled twice", () => {
+    const round = (n: number, status: "open" | "failed") => ({
+      id: `round-${n}`,
+      gateId: "plan-review",
+      gateType: "review" as const,
+      round: n,
+      status,
+      detail: status === "failed" ? "Missing edge cases." : "plan v3",
+      votes: [],
+      openedAt: "2026-11-19T00:00:00.000Z",
+      closedAt: status === "open" ? null : "2026-11-19T00:01:00.000Z",
+    });
+    const state: CovenRunState = {
+      ...running(initialRunState({ definition, leaderCandidateIndex: 0 })),
+      gates: [round(2, "failed"), round(3, "open")],
+    };
+    const note = covenLeaderNote({
+      binding: { name: "Review first", revision: 1 },
+      definition,
+      run: {
+        id: "run-1",
+        leaderThreadId: "thread-1",
+        covenId: "review-first",
+        revision: 1,
+        startedAt: "2026-11-19T00:00:00.000Z",
+        endedAt: null,
+        state,
+      } as never,
+    });
+    expect(note).toContain("Gate plan-review round 3 is open");
+    expect(note).not.toContain("round 2 failed");
+    expect(note).toContain("earlier gate round is already handled");
   });
 
   it("refuses new work once the run is paused", () => {
