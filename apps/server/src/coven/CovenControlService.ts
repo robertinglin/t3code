@@ -62,6 +62,7 @@ import {
   passedGate,
   replaceLatestAttempt,
   replaceTask,
+  runtimeWarningMinutes,
   toRunView,
   type CovenRunRecord,
   type CovenRunState,
@@ -458,6 +459,7 @@ const make = Effect.gen(function* () {
               status: record.state.resumeStatus ?? "running",
               statusReason: null,
               resumeStatus: null,
+              resumedAt: now,
             };
             const restarts: Array<{ task: CovenTaskState; candidate: CovenCandidate }> = [];
             for (const task of record.state.tasks.filter(
@@ -1424,34 +1426,92 @@ const make = Effect.gen(function* () {
     Effect.catchCause((cause) => Effect.logWarning("coven: run engine event failed", cause)),
   );
 
+  /**
+   * Each delegated agent run gets `maxRuntimeMinutes` on its own; the coven has no limit. The
+   * clock starts with the run's current attempt, or the user's last resume if that is later.
+   * The agent hears how long it has left shortly before the cap, and is stopped at it.
+   */
   const sweepRuntime = Effect.gen(function* () {
     const nowMs = Date.parse(yield* nowIso);
     for (const run of yield* covens.activeRuns) {
       if (run.state.status === "paused") continue;
-      // The limit bounds one piece of work, not the coven's life on the thread.
-      if (!run.state.tasks.some((task) => ACTIVE_TASK_STATUSES.has(task.status))) continue;
       const definition = yield* covens.definitionAt(run.covenId, run.revision);
       if (definition === null) continue;
-      const limitMs = definition.frontMatter.limits.maxRuntimeMinutes * 60_000;
-      if (nowMs - Date.parse(run.state.cycleStartedAt ?? run.startedAt) < limitMs) continue;
-      yield* covens.updateRun(run.id, (record) =>
-        Effect.succeed({
-          state: {
-            ...record.state,
-            status: "paused" as const,
-            resumeStatus: record.state.status,
-            statusReason: `This piece of work passed its ${definition.frontMatter.limits.maxRuntimeMinutes} minute limit.`,
-          },
-          events: [event("run.paused", "Paused: this piece of work reached its time limit.")],
-          result: undefined,
-        }),
-      );
-      yield* notifyLeader(
-        run,
-        "This piece of work reached its time limit and is paused. Stop delegating; the user decides how to continue.",
-      );
+      const limitMinutes = definition.frontMatter.limits.maxRuntimeMinutes;
+      const warnMinutes = runtimeWarningMinutes(limitMinutes);
+      for (const task of run.state.tasks) {
+        if (task.status !== "running" || task.childThreadId === null) continue;
+        const attempt = task.attempts.at(-1);
+        if (attempt === undefined) continue;
+        const since = Math.max(
+          Date.parse(attempt.startedAt),
+          run.state.resumedAt === undefined ? 0 : Date.parse(run.state.resumedAt),
+        );
+        const elapsedMinutes = (nowMs - since) / 60_000;
+        if (elapsedMinutes >= limitMinutes) {
+          yield* stopOverdueTask(run, task.id, attempt.id, task.childThreadId, limitMinutes);
+          continue;
+        }
+        if (
+          warnMinutes > 0 &&
+          elapsedMinutes >= limitMinutes - warnMinutes &&
+          (yield* markOnce(`runtime-warning:${attempt.id}:${since}`))
+        ) {
+          const left = Math.max(1, Math.ceil(limitMinutes - elapsedMinutes));
+          yield* sendAsCoven(
+            task.childThreadId,
+            `[Coven] You have about ${left} minute${left === 1 ? "" : "s"} left before this task's ${limitMinutes} minute limit stops you. Wrap up: finish or save what you have and report your result.`,
+            // The agent is mid-turn, so the warning steers that turn instead of queueing behind it.
+            { mode: "auto" },
+          ).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("coven: runtime warning send failed", cause),
+            ),
+          );
+        }
+      }
     }
   }).pipe(Effect.catchCause((cause) => Effect.logWarning("coven: runtime sweep failed", cause)));
+
+  const stopOverdueTask = Effect.fn("stopOverdueTask")(function* (
+    run: CovenRunRecord,
+    taskId: string,
+    attemptId: string,
+    childThreadId: ThreadId,
+    limitMinutes: number,
+  ) {
+    const now = yield* nowIso;
+    const message = `Stopped at its ${limitMinutes} minute limit.`;
+    const stopped = yield* covens.updateRun(run.id, (record) =>
+      Effect.sync(() => {
+        const current = record.state.tasks.find((task) => task.id === taskId);
+        if (current?.status !== "running" || current.attempts.at(-1)?.id !== attemptId) {
+          return { state: record.state, result: null };
+        }
+        return {
+          state: replaceTask(record.state, taskId, (task) => ({
+            ...replaceLatestAttempt(task, (latest) => ({
+              ...latest,
+              status: "failed",
+              failureClass: "time_limit",
+              failureMessage: message,
+              endedAt: now,
+            })),
+            status: "failed",
+            updatedAt: now,
+          })),
+          events: [event("task.failed", `${current.title} ${message}`)],
+          result: current.title,
+        };
+      }),
+    );
+    if (stopped === null) return;
+    yield* interrupt(childThreadId, "Coven task time limit");
+    yield* notifyLeader(
+      run,
+      `The task "${stopped}" ran for its full ${limitMinutes} minute limit and was stopped. Read thread ${childThreadId} for what it got done, then decide whether to delegate the rest.`,
+    );
+  });
 
   yield* forkParked(Stream.runForEach(threads.streamDomainEvents, onEvent));
   yield* forkParked(Stream.runForEach(covens.runChanges, projectDocs));

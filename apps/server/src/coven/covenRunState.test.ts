@@ -9,6 +9,7 @@ import { renderCovenRunDocs } from "./covenRunDocs.ts";
 import { covenLeaderNote } from "./covenWorkerTask.ts";
 import {
   delegationRefusal,
+  runtimeWarningMinutes,
   initialRunState,
   toRunView,
   type CovenRunState,
@@ -115,6 +116,11 @@ describe("coven run state", () => {
     expect(note).toContain("Gate plan-review round 3 is open");
     expect(note).not.toContain("round 2 failed");
     expect(note).toContain("earlier gate round is already handled");
+  });
+
+  it("warns an agent twenty minutes before the default limit", () => {
+    expect(240 - runtimeWarningMinutes(240)).toBe(220);
+    expect(runtimeWarningMinutes(20)).toBe(5);
   });
 
   it("refuses new work once the run is paused", () => {

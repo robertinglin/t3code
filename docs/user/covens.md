@@ -108,5 +108,5 @@ directory instead.
   leader can start for one piece of work. The count resets when the leader finishes it.
 - With the `hybrid` workspace policy, only one worker writes in the shared checkout at a time;
   others get their own worktree. `isolated-worktrees` gives every worker a worktree.
-- A piece of work that goes past `maxRuntimeMinutes` is paused. Idle time doesn't count.
+- The coven itself has no time limit. `maxRuntimeMinutes` (default 240) caps each delegated agent run on its own; time doesn't add up across agents. Twenty minutes before the cap the agent is told how long it has left; at the cap it is stopped and the leader decides what to do next. Resuming a paused coven restarts every running agent's clock.
 - Saving creates a new revision. A running run keeps the revision it started with.

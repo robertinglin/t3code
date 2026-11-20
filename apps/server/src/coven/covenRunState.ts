@@ -31,6 +31,8 @@ export interface CovenRunState {
   readonly delegations: number;
   /** When the current piece of work started. Older rows fall back to the run's start. */
   readonly cycleStartedAt?: string | undefined;
+  /** When the user last resumed the run; a task's time limit counts from here at the earliest. */
+  readonly resumedAt?: string | undefined;
   /** Gate rounds from earlier pieces of work, kept for the record. */
   readonly completedGates?: ReadonlyArray<CovenGateRound> | undefined;
   readonly tasks: ReadonlyArray<CovenTaskState>;
@@ -199,4 +201,9 @@ export function delegationRefusal(
     : `Gate ${blocking.map((gate) => gate.id).join(", ")} must pass before implementation. Request it with coven_request_gate; until then only ${
         electorate.join(", ") || "reviewers"
       } can be given work.`;
+}
+
+/** How many minutes before a task's time limit its agent is told to wrap up (20 for the default 240). */
+export function runtimeWarningMinutes(limitMinutes: number): number {
+  return Math.min(20, Math.floor(limitMinutes / 4));
 }

@@ -152,6 +152,7 @@ export const CovenLimits = Schema.Struct({
   maxActiveWorkers: boundedInt(1, 8),
   maxDelegationsPerRun: boundedInt(1, 200),
   maxReviewFixRounds: boundedInt(0, 20),
+  /** How long one delegated agent run may take. The coven itself has no time limit. */
   maxRuntimeMinutes: boundedInt(1, 24 * 60),
   maxTransientRetriesPerTask: boundedInt(0, 5),
   maxLeadershipTransitionsPerRun: boundedInt(0, 10),

@@ -535,7 +535,7 @@ function CovenGovernanceView({ definition }: { readonly definition: CovenDefinit
     ["Active workers", String(limits.maxActiveWorkers)],
     ["Delegations per run", String(limits.maxDelegationsPerRun)],
     ["Review and fix rounds", String(limits.maxReviewFixRounds)],
-    ["Runtime", `${limits.maxRuntimeMinutes} min`],
+    ["Agent run limit", `${limits.maxRuntimeMinutes} min each`],
     ["Retries per task", String(limits.maxTransientRetriesPerTask)],
     ["Leader handoffs", String(limits.maxLeadershipTransitionsPerRun)],
   ];
