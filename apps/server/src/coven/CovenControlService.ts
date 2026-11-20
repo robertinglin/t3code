@@ -221,8 +221,9 @@ const make = Effect.gen(function* () {
     ),
   );
 
+  // The leader is often mid-turn on a long task, so news steers that turn instead of waiting.
   const notifyLeader = (run: CovenRunRecord, text: string) =>
-    sendAsCoven(run.leaderThreadId, `[Coven] ${text}`).pipe(
+    sendAsCoven(run.leaderThreadId, `[Coven] ${text}`, { mode: "auto" }).pipe(
       Effect.catchCause((cause) => Effect.logWarning("coven: could not notify the leader", cause)),
     );
 
@@ -972,6 +973,7 @@ const make = Effect.gen(function* () {
     yield* sendAsCoven(
       scope.leaderThreadId,
       `[Coven] ${scope.roleId} reports (thread ${workerThreadId}):\n\n${message}`,
+      { mode: "auto" },
     );
   });
 
