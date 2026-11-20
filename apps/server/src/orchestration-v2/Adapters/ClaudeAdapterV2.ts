@@ -2256,6 +2256,8 @@ const CLAUDE_SEND_TO_USER_INSTRUCTIONS = `
 Text you write before a tool call may reach the user only as a one-line summary. When the user must read something in full before your turn ends, such as a draft, a code block, or what a question you're about to ask refers to, send it with \`send_to_user\`. Put everything else in your final reply.
 `;
 
+const CLAUDE_NATIVE_SUBAGENT_TOOLS = "^(Agent|Task)$";
+
 // Native subagents start from their task, not this session's system prompt.
 const subagentDeviceInstructions: HookCallback = () =>
   Promise.resolve({
@@ -2289,6 +2291,8 @@ export function makeClaudeQueryOptions(input: {
   readonly onUserDialog?: ClaudeQueryOptions["onUserDialog"];
   readonly onElicitation?: ClaudeQueryOptions["onElicitation"];
   readonly onStop?: HookCallback;
+  /** Runs before Claude's own subagent tool, which it can refuse. */
+  readonly onNativeSubagent?: HookCallback;
   readonly supportedDialogKinds?: ClaudeQueryOptions["supportedDialogKinds"];
   readonly allowDangerouslySkipPermissions?: boolean;
   readonly appendSystemPromptFileText?: string;
@@ -2449,13 +2453,21 @@ export function makeClaudeQueryOptions(input: {
         ...launchAppendSystemPrompt,
       ].join("\n\n"),
     },
-    ...(deviceInstructions || input.onStop !== undefined
+    ...(deviceInstructions || input.onStop !== undefined || input.onNativeSubagent !== undefined
       ? {
           hooks: {
             ...(deviceInstructions
               ? { SubagentStart: [{ hooks: [subagentDeviceInstructions] }] }
               : {}),
             ...(input.onStop === undefined ? {} : { Stop: [{ hooks: [input.onStop] }] }),
+            // A hook, not canUseTool: bypassPermissions skips canUseTool but still runs hooks.
+            ...(input.onNativeSubagent === undefined
+              ? {}
+              : {
+                  PreToolUse: [
+                    { matcher: CLAUDE_NATIVE_SUBAGENT_TOOLS, hooks: [input.onNativeSubagent] },
+                  ],
+                }),
           },
         }
       : {}),
@@ -12990,6 +13002,24 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 return pendingWake !== undefined && (yield* pendingWake) ? { continue: false } : {};
               }),
             );
+          // Read per call: one Claude process serves turns before and after a coven is picked.
+          const onNativeSubagent: HookCallback = () =>
+            runPromise(
+              Ref.get(activeTurn).pipe(
+                Effect.map((context) =>
+                  context?.input.runtimePolicy.nativeSubagents === "off"
+                    ? {
+                        hookSpecificOutput: {
+                          hookEventName: "PreToolUse" as const,
+                          permissionDecision: "deny" as const,
+                          permissionDecisionReason:
+                            "Your own subagents are turned off in a coven thread. Hand work to a coven role with coven_delegate_role, or do it yourself.",
+                        },
+                      }
+                    : {},
+                ),
+              ),
+            );
           const mcpOverrides = claudeMcpQueryOverrides({
             mcpSession,
             readOnlySandbox:
@@ -13165,6 +13195,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             onUserDialog,
             onElicitation,
             onStop,
+            onNativeSubagent,
             supportedDialogKinds: ["resume_return"],
             ...(appendSystemPromptFileText === undefined ? {} : { appendSystemPromptFileText }),
             ...(toolSearchOverride === undefined ? {} : { toolSearchOverride }),

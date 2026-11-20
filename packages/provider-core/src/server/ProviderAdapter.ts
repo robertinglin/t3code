@@ -56,6 +56,12 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
    * it; adapters use it to refuse native mode choices a user makes beside T3 Code's own.
    */
   maxRuntimeMode: Schema.optional(RuntimeMode),
+  /**
+   * "off" refuses the provider's own subagent tool (Claude's Agent), so work is handed out
+   * through T3 Code instead. Coven threads set it: their roles, models and limits apply only
+   * to delegations the coven makes.
+   */
+  nativeSubagents: Schema.optional(Schema.Literal("off")),
 });
 export type ProviderAdapterV2RuntimePolicy = typeof ProviderAdapterV2RuntimePolicy.Type;
 

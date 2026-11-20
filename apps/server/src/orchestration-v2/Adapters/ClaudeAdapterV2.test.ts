@@ -24885,6 +24885,60 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       ),
     );
 
+    it.effect("refuses Claude's own subagents when the turn turns them off", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const preToolUse = Effect.promise(() =>
+          Promise.all(
+            (harness.getOpenedOptions()?.hooks?.PreToolUse ?? []).flatMap((matcher) =>
+              matcher.hooks.map((hook) =>
+                hook(
+                  {
+                    hook_event_name: "PreToolUse",
+                    tool_name: "Agent",
+                    tool_input: { description: "Fix failures", prompt: "Fix them" },
+                    tool_use_id: "agent-tool-use",
+                    session_id: WAKE_NATIVE_SESSION,
+                    transcript_path: "/transcript.jsonl",
+                    cwd: "/workspace",
+                  },
+                  "agent-tool-use",
+                  { signal: new AbortController().signal },
+                ),
+              ),
+            ),
+          ),
+        );
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("coven-attempt"),
+            text: "Fix the failing tests",
+            attachments: [],
+            runtimePolicy: { ...CLAUDE_TEST_RUNTIME_POLICY, nativeSubagents: "off" },
+          }),
+        );
+        const [result] = yield* preToolUse;
+        assert.equal(
+          (result as { hookSpecificOutput?: { permissionDecision?: string } }).hookSpecificOutput
+            ?.permissionDecision,
+          "deny",
+        );
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+    );
+
     it.effect(
       "defers goal completion until an ambient subagent finishes and Claude checks again",
       () =>

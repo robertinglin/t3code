@@ -870,7 +870,16 @@ export const layer: Layer.Layer<
         });
         return;
       }
-      const resolvedRuntimePolicy = resolvedPolicy.success;
+      const covenScope = Option.isNone(covens)
+        ? null
+        : yield* covens.value
+            .threadScope(projection.thread.id)
+            .pipe(Effect.orElseSucceed(() => null));
+      // A coven hands out work only through its roles, never the provider's own subagents.
+      const resolvedRuntimePolicy =
+        covenScope === null
+          ? resolvedPolicy.success
+          : { ...resolvedPolicy.success, nativeSubagents: "off" as const };
       if (!(yield* isCurrentAttemptInStatus("starting"))) return;
       const existingSessionProjection = projection.providerSessions.find(
         (candidate) => candidate.id === providerSessionId,
@@ -1030,11 +1039,6 @@ export const layer: Layer.Layer<
         restartCancelledWork.length === 0
           ? ""
           : restartCancelledBackgroundWorkNote(restartCancelledWork);
-      const covenScope = Option.isNone(covens)
-        ? null
-        : yield* covens.value
-            .threadScope(projection.thread.id)
-            .pipe(Effect.orElseSucceed(() => null));
       const covenRun =
         covenScope?.kind === "leader" && Option.isSome(covens)
           ? yield* covens.value

@@ -42,7 +42,7 @@ Its first turn starts the coven's run. If the coven has
 sidebar or with `/coven approve` and `/coven reject`. The leader then hands work to worker roles.
 Each task opens a child thread on the role's first available model, with the role's instructions,
 the mission and the run's notes. The generic delegation and thread tools are turned off in coven
-threads, so work can't bypass the team's rules.
+threads, so work can't bypass the team's rules. Claude's own built-in subagents are turned off too.
 
 The sidebar shows the run: its status, the leader's model, one row per task (select a row to open
 its thread), anything waiting on you, recent activity, and models that are cooling down.
