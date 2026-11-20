@@ -1,6 +1,6 @@
 import { OrchestratorMcpFailure, OrchestratorMcpModelOption } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -11,6 +11,9 @@ const dependencies = [
   ThreadManagementService.ThreadManagementService,
   OrchestratorMcpService.OrchestratorMcpService,
 ];
+
+const threadTool = <T extends Tool.Any>(tool: T): T =>
+  tool.annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients) as T;
 
 const text = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max));
 
@@ -316,15 +319,15 @@ const CovenBuilderReadDraftTool = Tool.make("coven_builder_read_draft", {
   .annotate(Tool.OpenWorld, false);
 
 export const CovenToolkit = Toolkit.make(
-  CovenCapabilitiesTool,
-  CovenTaskStatusTool,
-  CovenDelegateRoleTool,
-  CovenProposePlanTool,
-  CovenRecordDecisionTool,
-  CovenRequestGateTool,
-  CovenSubmitVoteTool,
-  CovenCompleteRunTool,
-  CovenReportToLeaderTool,
-  CovenBuilderReadDraftTool,
-  CovenBuilderProposePatchTool,
+  threadTool(CovenCapabilitiesTool),
+  threadTool(CovenTaskStatusTool),
+  threadTool(CovenDelegateRoleTool),
+  threadTool(CovenProposePlanTool),
+  threadTool(CovenRecordDecisionTool),
+  threadTool(CovenRequestGateTool),
+  threadTool(CovenSubmitVoteTool),
+  threadTool(CovenCompleteRunTool),
+  threadTool(CovenReportToLeaderTool),
+  threadTool(CovenBuilderReadDraftTool),
+  threadTool(CovenBuilderProposePatchTool),
 );

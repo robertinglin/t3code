@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-import * as NodeFS from "node:fs";
 import {
   extractClaudeSubagentUpdate,
   extractClaudeSubagentSessionEvent,
@@ -21,17 +19,8 @@ import {
   isCopilotLostSessionError,
   makeCopilotSubagentRouting,
 } from "./copilotAcp.ts";
-import {
-  biliNodeCaBundlePath,
-  enableGlmAcpProxySupport,
-  glmAcpClientModulePath,
-  resolveBiliRegistryLauncher,
-} from "./biliLaunchers.ts";
-import {
-  BILI_AGENT_COMPATIBILITY,
-  defaultInstanceIdForDriver,
-  ProviderDriverKind,
-} from "@t3tools/contracts";
+import { prepareBiliRegistrySpawn } from "./biliLaunchers.ts";
+import { defaultInstanceIdForDriver, ProviderDriverKind } from "@t3tools/contracts";
 import { prefersHttpMcpTransport } from "./mcpTransport.ts";
 import { readCustomModelEntries } from "@t3tools/shared/model";
 import { AcpRegistrySettings } from "../settings.ts";
@@ -51,10 +40,7 @@ import * as EffectAcpErrors from "effect-acp/errors";
 
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
-import {
-  AgentLauncherPolicy,
-  resolveAgentLaunch,
-} from "@t3tools/provider-core/server/AgentLauncherPolicy";
+import { AgentLauncherPolicy } from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import {
   normalizeAcpRegistryCommands,
@@ -181,88 +167,11 @@ function makeAcpRegistryRuntime(
       );
       let spawn = resolved.spawn;
       if (launcherPolicy !== undefined) {
-        const biliLauncher = resolveBiliRegistryLauncher(options.settings);
-        if (
-          launcherPolicy.launcher === "bili" &&
-          biliLauncher?.agent === "jcode" &&
-          options.settings.agentId.toLowerCase() === "glm-acp-agent"
-        ) {
-          // GLM ACP creates a private Undici Agent, which otherwise bypasses Bili's proxy env.
-          yield* Effect.try({
-            try: () => {
-              const clientModulePath = glmAcpClientModulePath(resolved.spawn.command);
-              const clientSource = NodeFS.readFileSync(clientModulePath, "utf8");
-              const proxyAwareClientSource = enableGlmAcpProxySupport(clientSource);
-              if (proxyAwareClientSource === undefined) {
-                throw new Error(
-                  "The installed GLM ACP transport cannot be patched for Bili proxying.",
-                );
-              }
-              if (proxyAwareClientSource !== clientSource) {
-                NodeFS.writeFileSync(clientModulePath, proxyAwareClientSource);
-              }
-            },
-            catch: (cause) =>
-              new EffectAcpErrors.AcpSpawnError({
-                command: resolved.spawn.command,
-                cause,
-              }),
-          });
-        }
-        const hostEnvironment = yield* HostProcess.Environment;
-        const homeDirectory = yield* HostProcess.HomeDirectory;
-        const biliEnvironment =
-          biliLauncher?.agent === "jcode"
-            ? {
-                ...biliLauncher.environment,
-                NODE_EXTRA_CA_CERTS: biliNodeCaBundlePath(
-                  hostEnvironment.XDG_DATA_HOME,
-                  homeDirectory,
-                ),
-              }
-            : biliLauncher?.environment;
-        const compatibility = BILI_AGENT_COMPATIBILITY.find(
-          (entry) => entry.id === options.settings.agentId.toLowerCase(),
-        );
-        const launch = resolveAgentLaunch(
-          {
-            agent:
-              biliLauncher?.agent ??
-              (options.settings.agentId || options.settings.commandPath || "ACP agent"),
-            executable: resolved.spawn.command,
-            args: resolved.spawn.args,
-            ...(biliLauncher?.options === undefined ? {} : { biliOptions: biliLauncher.options }),
-            ...(biliEnvironment === undefined ? {} : { biliEnvironment }),
-            ...(resolved.spawn.cwd === undefined ? {} : { cwd: resolved.spawn.cwd }),
-            ...(resolved.spawn.env === undefined ? {} : { env: resolved.spawn.env }),
-            ...(biliLauncher === undefined
-              ? {
-                  biliCompatibility: {
-                    supported: false as const,
-                    reason:
-                      compatibility?.supported === false
-                        ? compatibility.reason
-                        : "This ACP agent does not have a verified bili launcher command.",
-                  },
-                }
-              : { biliCompatibility: { supported: true as const } }),
-          },
-          launcherPolicy,
-        );
-        if (launch._tag === "Unsupported") {
-          return yield* new EffectAcpErrors.AcpSpawnError({
-            command: resolved.spawn.command,
-            cause: new Error(launch.message),
-          });
-        }
-        const { shell: _shell, ...spawnOptions } = resolved.spawn;
-        spawn = {
-          ...spawnOptions,
-          command: launch.launch.command,
-          args: [...launch.launch.args],
-          ...(launch.launch.cwd === undefined ? {} : { cwd: launch.launch.cwd }),
-          ...(launch.launch.env === undefined ? {} : { env: launch.launch.env }),
-        };
+        spawn = yield* prepareBiliRegistrySpawn({
+          settings: options.settings,
+          spawn: resolved.spawn,
+          policy: launcherPolicy,
+        });
       }
       const context = yield* Layer.build(
         AcpSessionRuntime.layer({

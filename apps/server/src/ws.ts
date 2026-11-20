@@ -128,6 +128,7 @@ import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts"
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as CovenControlService from "./coven/CovenControlService.ts";
 import * as CovenService from "./coven/CovenService.ts";
+import * as CovenWsHandlers from "./coven/covenWsHandlers.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
@@ -2340,34 +2341,7 @@ export const layerWsRpc = (
           ),
         [ORCHESTRATION_V2_WS_METHODS.subscribePromptSuggestion]: (input) =>
           providerSessionManager.subscribePromptSuggestion(input.threadId),
-        [WS_METHODS.covensSubscribeList]: (input) => covens.subscribeList(input),
-        [WS_METHODS.covensGet]: (input) => covens.get(input.covenId),
-        [WS_METHODS.covensSave]: (input) => covens.save(input),
-        [WS_METHODS.covensArchive]: (input) => covenControl.archive(input.covenId),
-        [WS_METHODS.covensSubscribeThread]: (input) => covens.subscribeThread(input.threadId),
-        [WS_METHODS.covensSetThread]: (input) =>
-          covenControl.setThread(input.threadId, input.covenId),
-        [WS_METHODS.covensGetRevision]: (input) =>
-          covens.getRevision(input.covenId, input.revision),
-        [WS_METHODS.covensControlRun]: (input) =>
-          covenControl.controlRun(input.threadId, input.action),
-        [WS_METHODS.covensDecide]: (input) => covenControl.decide(input),
-        [WS_METHODS.covensClearCooldown]: (input) =>
-          covens.clearCooldown(input.providerInstanceId, input.modelId).pipe(Effect.as({})),
-        [WS_METHODS.covensStartBuilder]: (input) => covenControl.startBuilder(input),
-        [WS_METHODS.covensSubscribeDraft]: (input) => covens.subscribeDraft(input.draftId),
-        [WS_METHODS.covensDraftForThread]: (input) =>
-          covens.draftForThread(input.threadId).pipe(Effect.map((draft) => ({ draft }))),
-        [WS_METHODS.covensUpdateDraft]: (input) =>
-          covens.updateDraft({
-            draftId: input.draftId,
-            source: input.source,
-            expectedVersion: input.expectedVersion,
-            by: "user",
-            summary: null,
-          }),
-        [WS_METHODS.covensSaveDraft]: (input) => covenControl.saveDraft(input.draftId),
-        [WS_METHODS.covensClearThread]: (input) => covenControl.clearThread(input.threadId),
+        ...CovenWsHandlers.makeHandlers(covens, covenControl),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),

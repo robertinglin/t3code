@@ -1,11 +1,19 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import { AgentLauncherSettings } from "@t3tools/contracts/settings";
+import { AcpRegistrySettings } from "../settings.ts";
 
 import {
   biliNodeCaBundlePath,
   enableGlmAcpProxySupport,
   glmAcpClientModulePath,
+  prepareBiliRegistrySpawn,
   resolveBiliRegistryLauncher,
 } from "./biliLaunchers.ts";
+
+const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
+const decodeLauncherSettings = Schema.decodeSync(AgentLauncherSettings);
 
 describe("resolveBiliRegistryLauncher", () => {
   it("uses the configured bili lane for every verified ACP registry alias", () => {
@@ -93,4 +101,51 @@ describe("resolveBiliRegistryLauncher", () => {
       "/managed/npm/lib/node_modules/glm-acp-agent/dist/llm/glm-client.js",
     );
   });
+
+  it.effect("keeps native ACP registry launch inputs unchanged", () =>
+    Effect.gen(function* () {
+      const spawn = {
+        command: "/managed/codex",
+        args: ["--acp"],
+        cwd: "/project",
+        env: { TEST: "1" },
+      };
+      const result = yield* prepareBiliRegistrySpawn({
+        settings: decodeSettings({ agentId: "codex" }),
+        spawn,
+        policy: decodeLauncherSettings({ launcher: "native" }),
+      });
+      expect(result).toEqual(spawn);
+    }),
+  );
+
+  it.effect("wraps a verified ACP launch with the selected Bili binary", () =>
+    Effect.gen(function* () {
+      const result = yield* prepareBiliRegistrySpawn({
+        settings: decodeSettings({ agentId: "codex" }),
+        spawn: { command: "/managed/codex", args: ["--acp"] },
+        policy: decodeLauncherSettings({ launcher: "bili", biliBinaryPath: "/opt/bili" }),
+      });
+      expect(result).toEqual({
+        command: "/opt/bili",
+        args: ["--bin", "/managed/codex", "codex", "--acp"],
+        env: {},
+      });
+    }),
+  );
+
+  it.effect("refuses an unverified custom ACP launch in Bili mode", () =>
+    Effect.gen(function* () {
+      const result = yield* prepareBiliRegistrySpawn({
+        settings: decodeSettings({
+          agentId: "custom-agent",
+          source: "local",
+          commandPath: "/opt/agent",
+        }),
+        spawn: { command: "/opt/agent", args: ["--acp"] },
+        policy: decodeLauncherSettings({ launcher: "bili" }),
+      }).pipe(Effect.flip);
+      expect(result._tag).toBe("AcpSpawnError");
+    }),
+  );
 });

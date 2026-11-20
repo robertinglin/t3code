@@ -18,7 +18,6 @@ import {
 } from "@t3tools/contracts";
 import {
   DEFAULT_UNIFIED_SETTINGS,
-  BILI_AGENT_COMPATIBILITY,
   type DiffLayout,
   MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
   MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS,
@@ -69,6 +68,7 @@ import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeConte
 import { scopedIdleCompaction } from "./scopedSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
+import { AgentLauncherSettingsSection } from "./AgentLauncherSettingsSection";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
@@ -859,91 +859,7 @@ export function GeneralSettingsPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection id="agent-launcher" title={gt("Agent launcher")}>
-        <SettingsRow
-          serverScoped
-          settingKeys={["agentLauncher"]}
-          title={gt("Agent launcher")}
-          description={gt(
-            "Choose whether coding agents start directly or through Billion Context (bili).",
-          )}
-          control={
-            <Select
-              value={settings.agentLauncher.launcher}
-              onValueChange={(value) => {
-                if (value === "native" || value === "bili") {
-                  updateSettings({
-                    agentLauncher: { ...settings.agentLauncher, launcher: value },
-                  });
-                }
-              }}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label={gt("Agent launcher")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value="native">
-                  {gt("Native")}
-                </SelectItem>
-                <SelectItem hideIndicator value="bili">
-                  {gt("Billion Context (bili)")}
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
-        {settings.agentLauncher.launcher === "bili" ? (
-          <>
-            <SettingsRow
-              serverScoped
-              settingKeys={["agentLauncher"]}
-              title={gt("Bili executable path")}
-              description={gt("Leave blank to find bili on PATH.")}
-              control={
-                <DraftInput
-                  size="sm"
-                  className="w-full sm:w-72"
-                  value={settings.agentLauncher.biliBinaryPath}
-                  placeholder="bili"
-                  spellCheck={false}
-                  aria-label={gt("Bili executable path")}
-                  onCommit={(biliBinaryPath) =>
-                    updateSettings({
-                      agentLauncher: {
-                        ...settings.agentLauncher,
-                        biliBinaryPath: biliBinaryPath.trim(),
-                      },
-                    })
-                  }
-                />
-              }
-            />
-            <SettingsRow
-              title={gt("Compatibility status")}
-              description={
-                <>
-                  <div>
-                    {gt("Supported")}:{" "}
-                    {BILI_AGENT_COMPATIBILITY.filter((entry) => entry.supported)
-                      .map((entry) => gt(entry.label))
-                      .join(", ")}
-                  </div>
-                  {BILI_AGENT_COMPATIBILITY.filter((entry) => !entry.supported).map((entry) => (
-                    <div key={entry.id}>
-                      {gt(entry.label)}: {gt(entry.reason)}
-                    </div>
-                  ))}
-                  <div>
-                    {gt(
-                      "ACP Registry can use the Codex, Claude, Antigravity, OpenCode, Pi, and OMP bili launchers. Other registry IDs and custom executables are unavailable in bili mode.",
-                    )}
-                  </div>
-                </>
-              }
-            />
-          </>
-        ) : null}
-      </SettingsSection>
+      <AgentLauncherSettingsSection />
 
       <SettingsSection id="sidebar" title={gt("Sidebar")}>
         <SettingsRow

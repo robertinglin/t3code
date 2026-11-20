@@ -3,7 +3,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
 
-import { scanGlibcNeeds } from "./linux-glibc.ts";
+import { resolveGlibcBuildCeiling, scanGlibcNeeds } from "./linux-glibc.ts";
 
 const prepareServerCompileCache: (context: AfterPackContext) => Promise<void> =
   NodeModule.createRequire(import.meta.url)("./prepare-server-compile-cache.cjs");
@@ -22,7 +22,13 @@ interface AfterPackContext {
 export default async function afterPack(context: AfterPackContext): Promise<void> {
   await prepareServerCompileCache(context);
   await removeSharedWriteAccess(context.appOutDir);
-  const { minimum } = await scanGlibcNeeds(context.appOutDir);
+  const { minimum } = await scanGlibcNeeds(
+    context.appOutDir,
+    resolveGlibcBuildCeiling(
+      process.env.T3CODE_LOCAL_DESKTOP_DIR_BUILD === "1",
+      process.report?.getReport().header.glibcVersionRuntime,
+    ),
+  );
   for (const target of context.targets) {
     if (target.name !== "deb") continue;
     if (!target.options || !Array.isArray(target.options.depends)) {

@@ -6,7 +6,13 @@ import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import afterPack from "./linux-after-pack.ts";
-import { parseGlibcNeeds, scanGlibcNeeds } from "./linux-glibc.ts";
+import { parseGlibcNeeds, resolveGlibcBuildCeiling, scanGlibcNeeds } from "./linux-glibc.ts";
+
+it("keeps the release glibc ceiling while allowing local directory builds to match the host", () => {
+  expect(resolveGlibcBuildCeiling(false, "2.44")).toBe("2.39");
+  expect(resolveGlibcBuildCeiling(true, "2.44")).toBe("2.44");
+  expect(resolveGlibcBuildCeiling(true, undefined)).toBe("2.39");
+});
 
 it.each([
   ["GLIBC_2.9", "2.9"],

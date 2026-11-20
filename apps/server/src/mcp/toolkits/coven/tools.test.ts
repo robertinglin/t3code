@@ -1,9 +1,20 @@
 import { expect, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
+import { McpSchema } from "effect/ai";
 
+import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { advertisedJsonSchema } from "../../advertisedJsonSchema.ts";
 import { CovenToolkit } from "./tools.ts";
+
+it("keeps coven capabilities within a thread", () => {
+  for (const tool of Object.values(CovenToolkit.tools)) {
+    expect(Context.getOrUndefined(tool.annotations, McpSchema.EnabledWhen)).toBe(
+      McpInvocationContext.hiddenFromOutsideClients,
+    );
+  }
+});
 
 it("accepts a numeric draft version in coven_builder_propose_patch", () => {
   const tool = CovenToolkit.tools.coven_builder_propose_patch;

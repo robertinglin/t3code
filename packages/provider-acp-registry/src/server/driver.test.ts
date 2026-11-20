@@ -960,7 +960,16 @@ const driverLayer = TestProviderHost.layer({ runBackgroundWork: false }).pipe(
       ProviderEventLoggers.NoOpProviderEventLoggers,
     ),
   ),
-  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      NodeServices.layer,
+      NodeCrypto.layer,
+      Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make(() => Effect.die("Usage limits must not make HTTP requests in tests")),
+      ),
+    ),
+  ),
 );
 
 it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) => {
@@ -1071,7 +1080,7 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
         displayName: identity.displayName,
         enabled: true,
         environment: [],
-        config: decodeSettings({ source: "local", commandPath: "agent" }),
+        config: decodeSettings({ agentId: "agent", source: "local", commandPath: "agent" }),
       }).pipe(
         Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
           ...catalogWithInspection({

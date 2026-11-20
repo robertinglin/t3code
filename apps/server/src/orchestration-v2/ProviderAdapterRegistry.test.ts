@@ -144,7 +144,7 @@ const openWithBiliOverride = (driverKind: ProviderDriverKind) =>
     };
     const registry = yield* Effect.service(ProviderAdapterRegistry.ProviderAdapterRegistryV2).pipe(
       Effect.provide(
-        ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
+        layerRegistry.pipe(
           Layer.provide(
             Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
               getInstance: (id) => Effect.succeed(id === instanceId ? instance : undefined),

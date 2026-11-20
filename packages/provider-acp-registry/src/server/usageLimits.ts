@@ -15,8 +15,8 @@ import {
 } from "@t3tools/provider-core/server/usageLimits";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
-export const CLINE_PASS_USAGE_URL = "https://api.cline.bot/api/v1/users/me/plan/usage-limits";
-export const ZAI_USAGE_URL = "https://api.z.ai/api/monitor/usage/quota/limit";
+const CLINE_PASS_USAGE_URL = "https://api.cline.bot/api/v1/users/me/plan/usage-limits";
+const ZAI_USAGE_URL = "https://api.z.ai/api/monitor/usage/quota/limit";
 // Bili registry launchers with subscription usage limits.
 const CLINE_PASS_AGENT_IDS = new Set(["cline", "clinebot"]);
 const ZAI_AGENT_IDS = new Set(["glm-acp-agent"]);
@@ -93,7 +93,10 @@ function zaiResetTimeMs(value: string | number | undefined) {
   return Option.isSome(parsed) ? DateTime.toEpochMillis(parsed.value) : undefined;
 }
 
-export function zaiUsageToLimits(limits: ReadonlyArray<typeof ZaiUsageLimit.Type>, checkedAt: string) {
+export function zaiUsageToLimits(
+  limits: ReadonlyArray<typeof ZaiUsageLimit.Type>,
+  checkedAt: string,
+) {
   const entries = limits
     .filter((limit) => limit.type === "TOKENS_LIMIT")
     .map((limit) => ({
@@ -125,7 +128,9 @@ export function zaiUsageToLimits(limits: ReadonlyArray<typeof ZaiUsageLimit.Type
     while (usedIds.has(id)) id = `TOKENS_LIMIT:${kind}-${suffix++}`;
     usedIds.add(id);
     const resetsAt =
-      entry.resetMs !== undefined ? DateTime.formatIso(DateTime.makeUnsafe(entry.resetMs)) : undefined;
+      entry.resetMs !== undefined
+        ? DateTime.formatIso(DateTime.makeUnsafe(entry.resetMs))
+        : undefined;
     return {
       id,
       kind,
@@ -285,7 +290,8 @@ export const checkAcpRegistryUsageLimits = Effect.fn("AcpRegistryDriver.checkUsa
     never,
     HttpClient.HttpClient | FileSystem.FileSystem | Path.Path
   > {
-    if (CLINE_PASS_AGENT_IDS.has(input.agentId)) return yield* readClinePassAccount(input.environment);
+    if (CLINE_PASS_AGENT_IDS.has(input.agentId))
+      return yield* readClinePassAccount(input.environment);
     if (ZAI_AGENT_IDS.has(input.agentId)) return yield* readZaiAccount(input.environment);
     return makeUnavailableUsageLimits({
       checkedAt: DateTime.formatIso(yield* DateTime.now),
