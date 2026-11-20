@@ -4672,6 +4672,19 @@ function terminalResultError(
   }
 }
 
+/**
+ * The CLI could not reach the API at all, e.g. a launcher's local proxy died.
+ * Its HTTP client keeps the dead endpoint, so the process must be replaced.
+ */
+function isClaudeConnectionFailure(result: SDKResultMessage): boolean {
+  return (
+    result.subtype === "success" &&
+    result.is_error &&
+    result.api_error_status == null &&
+    /\b(?:ECONNREFUSED|ECONNRESET|EPIPE|Connection refused|Connection error)\b/i.test(result.result)
+  );
+}
+
 function isOverloadedResult(result: SDKResultMessage): boolean {
   return result.subtype === "success" && result.api_error_status === 529;
 }
@@ -12176,6 +12189,16 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             ) {
               context.heldResult = message;
               return;
+            }
+            if (!interrupted && isClaudeConnectionFailure(message)) {
+              // The next turn starts a fresh CLI (and a fresh launcher proxy) and resumes.
+              yield* Effect.logWarning(
+                "orchestration-v2.claude-connection-failed-replacing-process",
+                {
+                  providerTurnId: context.providerTurnId,
+                },
+              );
+              liveQuery.stopping = true;
             }
             yield* finalizeActiveTurn({
               context,

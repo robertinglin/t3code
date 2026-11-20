@@ -4272,6 +4272,67 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     ),
   );
 
+  it.effect.each([
+    {
+      result:
+        "API Error: Connection refused — a firewall or proxy may be blocking it (ECONNREFUSED)",
+      replaced: true,
+    },
+    { result: "API Error: 500 Internal server error", replaced: false },
+  ])(
+    "replaces the CLI after it loses its connection to the API ($replaced)",
+    ({ result, replaced }) =>
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarnessWithOptions({
+          freshQueueOnReopen: true,
+          close: (queue) => Queue.shutdown(queue),
+        });
+        const latest = (): OrchestrationV2ProviderThread => {
+          const event = harness.events.findLast(
+            (candidate) => candidate.type === "provider_thread.updated",
+          );
+          return event?.type === "provider_thread.updated"
+            ? event.providerThread
+            : harness.providerThread;
+        };
+        const turn = (ordinal: number) =>
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: latest(),
+            now: DateTime.makeUnsafe(0),
+            attemptId: RunAttemptId.make(`connection-failure-${ordinal}`),
+            text: `Turn ${ordinal}`,
+            attachments: [],
+            providerTurnOrdinal: ordinal,
+          });
+        yield* harness.runtime.startTurn(turn(1));
+        yield* harness.offerAndWait(
+          makeResultFrame({
+            uuid: "00000000-0000-4000-8000-000000000801",
+            result,
+            isError: true,
+            terminalReason: "api_error",
+            ...(replaced ? {} : { apiErrorStatus: 500 }),
+          }),
+        );
+        const terminal = yield* Queue.take(harness.terminalReceipts);
+        assert.equal(terminal.status, "failed");
+        // "continue" must not reuse a process whose API endpoint is gone.
+        yield* harness.runtime.startTurn(turn(2));
+        assert.equal(harness.processQueues.length, replaced ? 2 : 1);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+  );
+
   it.effect("resumes the session a /clear selected after the Claude process is replaced", () =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarnessWithOptions({
