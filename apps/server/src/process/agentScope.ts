@@ -19,6 +19,14 @@ import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as ProviderProcesses from "./providerProcesses.ts";
+import {
+  detachedListeners,
+  parseProcStat,
+  parseTcpTable,
+  type ScopeProcess,
+  sharedHelperPids,
+  socketInode,
+} from "./sharedHelpers.ts";
 
 const AGENT_SLICE = "app-t3code-agents.slice";
 // Owns every agent slice and competes with the server's unit or scope under app.slice.
@@ -53,6 +61,7 @@ export interface ScopeState {
   readonly result: string;
   readonly oomKills: number | undefined;
   readonly populated: boolean | undefined;
+  readonly controlGroup?: string | undefined;
 }
 
 /** Pipes can close before systemd records oom-kill; stopping, empty or OOM-counted scopes remain pending. */
@@ -277,6 +286,7 @@ export const make = Effect.gen(function* () {
       result: values.get("Result") ?? "",
       oomKills: parseCgroupCounter(memoryEvents, "oom_kill"),
       populated: populated === undefined ? undefined : populated === 1,
+      controlGroup,
     } satisfies ScopeState;
   });
 
@@ -356,6 +366,152 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  const readPids = (controlGroup: string) =>
+    readCgroupFile(controlGroup, "cgroup.procs").pipe(
+      Effect.map((text) =>
+        text
+          .split("\n")
+          .map(Number)
+          .filter((pid) => Number.isInteger(pid) && pid > 0),
+      ),
+    );
+
+  const socketInodesOf = (pid: number) =>
+    fileSystem.readDirectory(`/proc/${pid}/fd`).pipe(
+      Effect.flatMap((fds) =>
+        Effect.forEach(
+          fds,
+          (fd) =>
+            fileSystem.readLink(`/proc/${pid}/fd/${fd}`).pipe(
+              Effect.map(socketInode),
+              Effect.orElseSucceed(() => undefined),
+            ),
+          { concurrency: 16 },
+        ),
+      ),
+      Effect.map((inodes) => new Set(inodes.filter((inode) => inode !== undefined))),
+      Effect.orElseSucceed(() => new Set<string>()),
+    );
+
+  const readScopeProcesses = Effect.fn("agentScope.readScopeProcesses")(function* (
+    controlGroup: string,
+  ) {
+    const pids = yield* readPids(controlGroup);
+    const processes = yield* Effect.forEach(
+      pids,
+      (pid) =>
+        Effect.gen(function* () {
+          const stat = parseProcStat(
+            yield* fileSystem
+              .readFileString(`/proc/${pid}/stat`)
+              .pipe(Effect.orElseSucceed(() => "")),
+          );
+          if (stat === undefined) return undefined;
+          return { pid, ...stat, socketInodes: yield* socketInodesOf(pid) } satisfies ScopeProcess;
+        }),
+      { concurrency: 8 },
+    );
+    return processes.filter((process) => process !== undefined);
+  });
+
+  /** Every other cgroup under the agents slice, helper scopes included. */
+  const otherAgentInodes = Effect.fn("agentScope.otherAgentInodes")(function* (
+    controlGroup: string,
+  ) {
+    const segments = controlGroup.split("/");
+    const sliceIndex = segments.lastIndexOf(AGENT_SLICE);
+    const root = sliceIndex > 0 ? segments.slice(0, sliceIndex + 1).join("/") : undefined;
+    const inodes = new Set<string>();
+    if (root === undefined) return inodes;
+    const pending = [root];
+    for (let group = pending.pop(); group !== undefined; group = pending.pop()) {
+      if (group === controlGroup) continue;
+      for (const pid of yield* readPids(group)) {
+        for (const inode of yield* socketInodesOf(pid)) inodes.add(inode);
+      }
+      const entries = yield* fileSystem
+        .readDirectory(path.join("/sys/fs/cgroup", group))
+        .pipe(Effect.orElseSucceed(() => []));
+      for (const entry of entries) {
+        if (entry.endsWith(".scope") || entry.endsWith(".slice")) pending.push(`${group}/${entry}`);
+      }
+    }
+    return inodes;
+  });
+
+  const readTcpSockets = Effect.forEach(["/proc/net/tcp", "/proc/net/tcp6"], (file) =>
+    fileSystem.readFileString(file).pipe(
+      Effect.map(parseTcpTable),
+      Effect.orElseSucceed(() => []),
+    ),
+  ).pipe(Effect.map((tables) => tables.flat()));
+
+  /**
+   * Moves detached loopback helpers that other agents still use (bili's shared
+   * proxy) into their own scope, so stopping or killing this scope leaves them
+   * running. They then live as long as their own lifecycle allows.
+   */
+  const releaseSharedHelpers = Effect.fn("agentScope.releaseSharedHelpers")(function* (
+    unit: string,
+    controlGroup: string,
+  ) {
+    if (controlGroup.length === 0) return;
+    const processes = yield* readScopeProcesses(controlGroup);
+    const sockets = yield* readTcpSockets;
+    // Most scopes listen on nothing detached; skip the slice walk for them.
+    if (detachedListeners(processes, sockets).size === 0) return;
+    const pids = sharedHelperPids({
+      processes,
+      sockets,
+      otherAgentInodes: yield* otherAgentInodes(controlGroup),
+    });
+    if (pids.length === 0) return;
+    const busctl = yield* resolve("busctl", hostEnvironment);
+    if (busctl === null) {
+      yield* Effect.logWarning("Could not keep a shared helper running: busctl is missing", {
+        unit,
+        pids,
+      });
+      return;
+    }
+    const helperUnit = `t3code-helper-${NodeCrypto.randomUUID().slice(0, 8)}.scope`;
+    const adopted = yield* run(busctl, [
+      "--user",
+      "call",
+      "org.freedesktop.systemd1",
+      "/org/freedesktop/systemd1",
+      "org.freedesktop.systemd1.Manager",
+      "StartTransientUnit",
+      "ssa(sv)a(sa(sv))",
+      helperUnit,
+      "fail",
+      "4",
+      "PIDs",
+      "au",
+      String(pids.length),
+      ...pids.map(String),
+      "Slice",
+      "s",
+      ownedSlice,
+      "CollectMode",
+      "s",
+      "inactive-or-failed",
+      "Description",
+      "s",
+      `Shared agent helper released from ${unit}`,
+      "0",
+    ]);
+    if (adopted._tag === "Some" && adopted.value.code === 0) {
+      yield* Effect.logInfo("Kept a shared agent helper running", { unit, helperUnit, pids });
+      return;
+    }
+    yield* Effect.logWarning("Could not keep a shared helper running", {
+      unit,
+      pids,
+      stderr: adopted._tag === "Some" ? adopted.value.stderr.trim() : undefined,
+    });
+  });
+
   const stop = Effect.fn("AgentScope.stop")(function* (unit: string) {
     if (!unit.startsWith("t3code-") || !unit.endsWith(".scope")) return;
     const scope = yield* systemd;
@@ -373,6 +529,7 @@ export const make = Effect.gen(function* () {
     // record the result before a manual stop can overwrite it; an unreadable
     // counter cannot rule out that race. Older managers need us to stop it.
     if (scope.supportsOomPolicy && (state.oomKills === undefined || state.oomKills > 0)) return;
+    yield* releaseSharedHelpers(unit, state.controlGroup ?? "");
     const stopped = yield* run(scope.systemctl, ["--user", "stop", "--no-block", unit]);
     if (stopped._tag === "None" || stopped.value.code !== 0) {
       yield* Effect.logWarning("Could not stop an exited agent's scope", {
@@ -397,6 +554,7 @@ export const make = Effect.gen(function* () {
     const values = parseKeyValues(shown.value.stdout);
     if (values.get("ActiveState") !== "active") return false;
     const controlGroup = values.get("ControlGroup") ?? "";
+    yield* releaseSharedHelpers(tracked.unit, controlGroup);
     // cgroup.kill (Linux 5.14+) kills the whole tree at once; systemd's kill is the fallback.
     const killedByCgroup =
       controlGroup.length > 0 &&
