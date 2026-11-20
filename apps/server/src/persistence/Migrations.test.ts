@@ -5,9 +5,12 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Migrator from "effect/sql/Migrator";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { migrationManifest, runMigrations } from "./Migrations.ts";
+import { hasPendingMigrations, migrationManifest, runMigrations } from "./Migrations.ts";
+import { runCovenMigrations } from "./CovenMigrations.ts";
+import CovenMigration from "./CovenMigrations/001_Covens.ts";
 
 const v2Migrations = migrationManifest.filter(([id]) => id >= 55);
 const newerMigrationId = Math.max(...migrationManifest.map(([id]) => id)) + 1;
@@ -29,6 +32,83 @@ const v2TableCount = Effect.gen(function* () {
 });
 
 describe("runMigrations", () => {
+  it.effect("moves a legacy coven migration out of the main ledger without losing covens", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 91 });
+      yield* Migrator.make({})({
+        loader: Migrator.fromRecord({ "92_Covens": CovenMigration }),
+      });
+      yield* sql`
+        INSERT INTO covens (
+          coven_id, slug, name, current_revision, archived_at, created_at, updated_at
+        ) VALUES (
+          'coven-preserved', 'coven-preserved', 'Preserved coven', 1, NULL,
+          '2026-11-20T00:00:00.000Z', '2026-11-20T00:00:00.000Z'
+        )
+      `;
+
+      const executed = yield* runMigrations();
+      const covens = yield* sql<{ readonly name: string }>`
+        SELECT name FROM covens WHERE coven_id = 'coven-preserved'
+      `;
+      const mainHistory = yield* history;
+      const covenHistory = yield* sql<{
+        readonly migration_id: number;
+        readonly name: string;
+      }>`SELECT migration_id, name FROM coven_sql_migrations ORDER BY migration_id`;
+      const queuedInputIndex = yield* sql<{ readonly sql: string | null }>`
+        SELECT sql FROM sqlite_master
+        WHERE type = 'index' AND name = 'orchestration_v2_projection_turn_items_queued_input_idx'
+      `;
+
+      assert.deepStrictEqual(
+        executed,
+        migrationManifest.filter(([id]) => id >= 92),
+      );
+      assert.deepStrictEqual(mainHistory, migrationManifest);
+      assert.deepStrictEqual(covens, [{ name: "Preserved coven" }]);
+      assert.deepStrictEqual(covenHistory, [{ migration_id: 1, name: "Covens" }]);
+      assert.include(queuedInputIndex[0]?.sql ?? "", "json_valid");
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("moves a temporary coven migration at main id 103 into its own ledger", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 102 });
+      yield* runCovenMigrations();
+      yield* Migrator.make({})({
+        loader: Migrator.fromRecord({ "103_Covens": CovenMigration }),
+      });
+      yield* sql`
+        INSERT INTO covens (
+          coven_id, slug, name, current_revision, archived_at, created_at, updated_at
+        ) VALUES (
+          'coven-at-103', 'coven-at-103', 'Preserved coven', 1, NULL,
+          '2026-11-20T00:00:00.000Z', '2026-11-20T00:00:00.000Z'
+        )
+      `;
+
+      assert.isTrue(yield* hasPendingMigrations());
+      yield* runMigrations();
+
+      assert.deepStrictEqual(yield* history, migrationManifest);
+      assert.deepStrictEqual(
+        yield* sql<{
+          readonly name: string;
+        }>`SELECT name FROM covens WHERE coven_id = 'coven-at-103'`,
+        [{ name: "Preserved coven" }],
+      );
+      assert.deepStrictEqual(
+        yield* sql<{ readonly migration_id: number; readonly name: string }>`
+          SELECT migration_id, name FROM coven_sql_migrations ORDER BY migration_id
+        `,
+        [{ migration_id: 1, name: "Covens" }],
+      );
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("refuses to start when another migration took a V2 id", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;

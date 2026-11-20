@@ -1,6 +1,7 @@
 import * as Migrator from "effect/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
+import { hasPendingCovenMigrations, runCovenMigrations } from "./CovenMigrations.ts";
 import {
   DATABASE_MIGRATION_PROGRESS_MESSAGE,
   DATABASE_MIGRATIONS_FINISHED_MESSAGE,
@@ -110,7 +111,10 @@ import Migration0099 from "./Migrations/099_BackgroundRecoveryIndexes.ts";
 import Migration0100 from "./Migrations/100_TurnStartReadIndexes.ts";
 import Migration0101 from "./Migrations/101_DelegatedTaskReadIndexes.ts";
 import Migration0102 from "./Migrations/102_ThreadItemCounts.ts";
-import Migration0103 from "./Migrations/103_Covens.ts";
+import {
+  legacyCovenMigrationId,
+  reconcileLegacyCovenMigration,
+} from "./reconcileLegacyCovenMigration.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -216,7 +220,6 @@ const migrationEntries = [
   [100, "TurnStartReadIndexes", Migration0100],
   [101, "DelegatedTaskReadIndexes", Migration0101],
   [102, "ThreadItemCounts", Migration0102],
-  [103, "Covens", Migration0103],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -291,7 +294,21 @@ export const hasPendingMigrations = Effect.fn("hasPendingMigrations")(function* 
     FROM effect_sql_migrations
   `;
   const row = rows[0];
-  return (row?.latestId ?? 0) < latestMigrationId || (row?.previewRows ?? 0) > 0;
+  const recorded = yield* sql<{
+    readonly migration_id: number;
+    readonly name: string;
+  }>`SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id`;
+  const hasLegacyCovenMigration =
+    legacyCovenMigrationId(
+      recorded.map(({ migration_id, name }) => ({ id: migration_id, name })),
+      migrationManifest,
+    ) !== undefined;
+  return (
+    (row?.latestId ?? 0) < latestMigrationId ||
+    (row?.previewRows ?? 0) > 0 ||
+    hasLegacyCovenMigration ||
+    (yield* hasPendingCovenMigrations())
+  );
 });
 
 const run = Migrator.make({});
@@ -310,6 +327,9 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
   // The reconcile takes the write lock; CLI startup must not contend with the server for a no-op.
   const previewMigrations = includesV2 && hasPending ? yield* reconcileV2PreviewMigration() : [];
+  if (includesV2 && hasPending) {
+    yield* reconcileLegacyCovenMigration(migrationManifest);
+  }
   if (includesV2) {
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
   }
@@ -342,7 +362,12 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     }
     executedMigrations.push(...(yield* run({ loader: makeMigrationLoader(id) })));
   }
-  const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
+  const executedCovenMigrations =
+    toMigrationInclusive === undefined && hasPending ? yield* runCovenMigrations() : [];
+  const migrations = [
+    ...executedMigrations.map(([id, name]) => `${id}_${name}`),
+    ...executedCovenMigrations.map(([id, name]) => `coven_${id}_${name}`),
+  ];
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")
     : Effect.log(DATABASE_MIGRATIONS_FINISHED_MESSAGE).pipe(Effect.annotateLogs({ migrations }));

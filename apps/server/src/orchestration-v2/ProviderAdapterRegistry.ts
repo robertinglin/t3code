@@ -135,15 +135,16 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
                     if (refused) refused = yield* refuseBroken(yield* instance.snapshot.refresh);
                     if (refused) return yield* refused;
                   }
-                  const related = auth
-                    ? auth.credentialBinding
-                      ? (yield* instances.listInstances).filter(
-                          (candidate) =>
-                            candidate.auth?.credentialBinding?.key === auth.credentialBinding.key &&
-                            candidate.auth.credentialBinding.owner === auth.credentialBinding.owner,
-                        )
-                      : [instance]
-                    : [];
+                  const credentialBinding = auth?.credentialBinding;
+                  const related = credentialBinding
+                    ? (yield* instances.listInstances).filter(
+                        (candidate) =>
+                          candidate.auth?.credentialBinding?.key === credentialBinding.key &&
+                          candidate.auth?.credentialBinding?.owner === credentialBinding.owner,
+                      )
+                    : auth
+                      ? [instance]
+                      : [];
                   for (const relatedInstance of related) {
                     if (
                       relatedInstance.auth?.isChangingCredentials &&
