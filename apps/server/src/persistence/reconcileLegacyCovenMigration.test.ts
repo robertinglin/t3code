@@ -14,12 +14,11 @@ it("recognizes the old coven entry at id 92", () => {
 
 it("recognizes the temporary coven entry at id 103 when main also reaches 103", () => {
   const history = [
-    ...migrationManifest.map(([id, name]) => ({ id, name })),
+    ...migrationManifest.filter(([id]) => id < 103).map(([id, name]) => ({ id, name })),
     { id: 103, name: "Covens" },
   ];
-  const mainWith103 = [...migrationManifest, [103, "MainMigration103"] as const];
 
-  expect(legacyCovenMigrationId(history, mainWith103)).toBe(103);
+  expect(legacyCovenMigrationId(history, migrationManifest)).toBe(103);
 });
 
 it("leaves unrelated or extended migration histories alone", () => {

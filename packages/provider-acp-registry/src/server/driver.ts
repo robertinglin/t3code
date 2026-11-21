@@ -18,12 +18,12 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
 import * as HttpClient from "effect/http/HttpClient";
 import * as Semaphore from "effect/Semaphore";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
@@ -640,11 +640,11 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     }
     const random = yield* SecureRandom.SecureRandom;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const hostEnvironment = yield* HostProcess.Environment;
     const host = yield* ProviderHost.ProviderHost;
     const httpClient = yield* HttpClient.HttpClient;
-    const fileSystem = yield* FileSystem.FileSystem;
-    const pathService = yield* Path.Path;
     const continuationIdentity = defaultProviderContinuationIdentity({
       driverKind: DRIVER_KIND,
       instanceId,
@@ -748,7 +748,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     }).pipe(
       Effect.provideService(HttpClient.HttpClient, httpClient),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
-      Effect.provideService(Path.Path, pathService),
+      Effect.provideService(Path.Path, path),
       Effect.annotateLogs({ providerInstanceId: instanceId }),
     );
     const checkProvider = Effect.all(
@@ -781,6 +781,8 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     ).pipe(
       Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
       Effect.provideService(SecureRandom.SecureRandom, random),
     );
     const enrichmentCache = yield* Ref.make<AcpRegistryEnrichmentCache>({
