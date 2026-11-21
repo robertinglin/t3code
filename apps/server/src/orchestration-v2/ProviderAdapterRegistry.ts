@@ -8,7 +8,6 @@ import { BILI_AGENT_COMPATIBILITY, biliAgentIdForDriver } from "@t3tools/contrac
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
@@ -73,13 +72,15 @@ export class ProviderAdapterRegistryV2 extends Context.Service<
 export const layerFromProviderInstanceRegistry: Layer.Layer<
   ProviderAdapterRegistryV2,
   never,
-  ProviderInstanceRegistry.ProviderInstanceRegistry | ModelManifest.ModelManifest
+  | ProviderInstanceRegistry.ProviderInstanceRegistry
+  | ModelManifest.ModelManifest
+  | ServerSettings.ServerSettingsService
 > = Layer.effect(
   ProviderAdapterRegistryV2,
   Effect.gen(function* () {
     const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
     const manifest = yield* ModelManifest.ModelManifest;
-    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
     return ProviderAdapterRegistryV2.of({
       get: Effect.fn("ProviderAdapterRegistryV2.get")(function (instanceId) {
         return instances.getInstance(instanceId).pipe(
@@ -106,15 +107,10 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
               ...adapter,
               openSession: (input) => {
                 const open = Effect.gen(function* () {
-                  const launcherSettings = yield* Option.match(serverSettings, {
-                    onNone: () =>
-                      Effect.succeed({ launcher: "native" as const, biliBinaryPath: "bili" }),
-                    onSome: (service) =>
-                      service.getSettings.pipe(
-                        Effect.map((settings) => settings.agentLauncher),
-                        Effect.orDie,
-                      ),
-                  });
+                  const launcherSettings = yield* serverSettings.getSettings.pipe(
+                    Effect.map((settings) => settings.agentLauncher),
+                    Effect.orDie,
+                  );
                   const effectiveLauncherSettings = {
                     ...launcherSettings,
                     launcher: instance.agentLauncher ?? launcherSettings.launcher,
@@ -165,9 +161,32 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
                   for (const peer of related) {
                     if (peer.auth?.withAccess) admitted = peer.auth.withAccess(admitted);
                   }
-                  return yield* admitted.pipe(
+                  const runtime = yield* admitted.pipe(
                     Effect.provideService(AgentLauncherPolicy, effectiveLauncherSettings),
                   );
+                  const withLauncherPolicy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+                    effect.pipe(
+                      Effect.provideService(AgentLauncherPolicy, effectiveLauncherSettings),
+                    );
+                  const resumeTurn = runtime.resumeTurn;
+                  const compactThread = runtime.compactThread;
+                  return {
+                    ...runtime,
+                    startTurn: (turn: ProviderAdapter.ProviderAdapterV2TurnInput) =>
+                      withLauncherPolicy(runtime.startTurn(turn)),
+                    ...(resumeTurn === undefined
+                      ? {}
+                      : {
+                          resumeTurn: (turn: Parameters<typeof resumeTurn>[0]) =>
+                            withLauncherPolicy(resumeTurn(turn)),
+                        }),
+                    ...(compactThread === undefined
+                      ? {}
+                      : {
+                          compactThread: (turn: Parameters<typeof compactThread>[0]) =>
+                            withLauncherPolicy(compactThread(turn)),
+                        }),
+                  };
                 });
                 return open.pipe(
                   Effect.mapError((cause) =>

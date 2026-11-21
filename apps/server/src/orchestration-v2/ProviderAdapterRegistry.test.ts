@@ -13,13 +13,16 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
+import * as AgentLauncherPolicy from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import * as ProviderAuthFlow from "@t3tools/provider-core/server/providerAuthFlow";
 import type { ProviderAuthController } from "../provider/ProviderAuthService.ts";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import * as ModelManifest from "../provider/ModelManifest.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
@@ -76,6 +79,7 @@ const layerInstanceRegistry = Layer.succeed(ProviderInstanceRegistry.ProviderIns
 });
 const layerRegistry = ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
   Layer.provide(ModelManifest.layerTest),
+  Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
 );
 const layerTest = layerRegistry.pipe(Layer.provide(layerInstanceRegistry));
 
@@ -88,6 +92,67 @@ it.effect("routes two configured instances of the same driver independently", ()
     assert.deepEqual(yield* registry.list(), [personalId, workId]);
   }).pipe(Effect.provide(layerTest)),
 );
+
+it.effect("keeps the global launcher setting available when a provider turn starts", () => {
+  const instanceId = ProviderInstanceId.make("claude_global_bili");
+  const providerSessionId = ProviderSessionId.make("global-bili-session");
+  let observedLauncher: AgentLauncherPolicy.AgentLauncherPolicy["Service"] | undefined;
+  const runtime = {
+    startTurn: () =>
+      Effect.serviceOption(AgentLauncherPolicy.AgentLauncherPolicy).pipe(
+        Effect.map((setting) => {
+          observedLauncher = Option.getOrUndefined(setting);
+        }),
+      ),
+  } as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime;
+  const adapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
+    ...makeAdapter(instanceId),
+    driver: ProviderDriverKind.make("claudeAgent"),
+    openSession: () => Effect.succeed(runtime),
+  };
+  const instance = {
+    ...makeInstance(instanceId, adapter),
+    driverKind: ProviderDriverKind.make("claudeAgent"),
+  };
+  const registryLayer = ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
+    Layer.provide(ModelManifest.layerTest),
+    Layer.provide(
+      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+        getInstance: () => Effect.succeed(instance),
+        listInstances: Effect.succeed([instance]),
+        listUnavailable: Effect.succeed([]),
+        streamChanges: Stream.empty,
+        subscribeChanges: Effect.never,
+      }),
+    ),
+    Layer.provide(
+      ServerSettings.ServerSettingsService.layerTest({
+        agentLauncher: { launcher: "bili", biliBinaryPath: "/opt/bili" },
+      }),
+    ),
+  );
+
+  return Effect.gen(function* () {
+    const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const adapterForClaude = yield* registry.get(instanceId);
+    const opened = yield* adapterForClaude.openSession({
+      threadId: ThreadId.make("global-bili-thread"),
+      providerSessionId,
+      modelSelection: { instanceId, model: "test-model" },
+      runtimePolicy: {
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: "/workspace",
+      },
+    });
+    yield* opened.startTurn({} as never);
+
+    assert.deepStrictEqual(observedLauncher, {
+      launcher: "bili",
+      biliBinaryPath: "/opt/bili",
+    });
+  }).pipe(Effect.provide(registryLayer));
+});
 
 const openOn = Effect.fn("openOn")(function* (instance: ProviderInstance) {
   const registry = yield* Effect.service(ProviderAdapterRegistry.ProviderAdapterRegistryV2).pipe(
