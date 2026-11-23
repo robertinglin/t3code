@@ -154,6 +154,65 @@ it.effect("keeps the global launcher setting available when a provider turn star
   }).pipe(Effect.provide(registryLayer));
 });
 
+it.effect("passes a pxpipe launcher selection into provider turns", () => {
+  const instanceId = ProviderInstanceId.make("gemini");
+  const providerSessionId = ProviderSessionId.make("gemini-pxpipe-session");
+  let observedLauncher: AgentLauncherPolicy.AgentLauncherPolicy["Service"] | undefined;
+  const runtime = {
+    startTurn: () =>
+      Effect.serviceOption(AgentLauncherPolicy.AgentLauncherPolicy).pipe(
+        Effect.map((setting) => {
+          observedLauncher = Option.getOrUndefined(setting);
+        }),
+      ),
+  } as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime;
+  const acpRegistryDriver = ProviderDriverKind.make("acpRegistry");
+  const adapter = {
+    ...makeAdapter(instanceId),
+    driver: acpRegistryDriver,
+    openSession: () => Effect.succeed(runtime),
+  };
+  const instance = {
+    ...makeInstance(instanceId, adapter),
+    driverKind: acpRegistryDriver,
+    agentLauncher: "pxpipe" as const,
+  };
+  const registryLayer = ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
+    Layer.provide(ModelManifest.layerTest),
+    Layer.provide(
+      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+        getInstance: () => Effect.succeed(instance),
+        listInstances: Effect.succeed([instance]),
+        listUnavailable: Effect.succeed([]),
+        streamChanges: Stream.empty,
+        subscribeChanges: Effect.never,
+      }),
+    ),
+    Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
+  );
+
+  return Effect.gen(function* () {
+    const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const adapterForGemini = yield* registry.get(instanceId);
+    const opened = yield* adapterForGemini.openSession({
+      threadId: ThreadId.make("gemini-pxpipe-thread"),
+      providerSessionId,
+      modelSelection: { instanceId, model: "gemini-test" },
+      runtimePolicy: {
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: "/workspace",
+      },
+    });
+    yield* opened.startTurn({} as never);
+
+    assert.deepStrictEqual(observedLauncher, {
+      launcher: "pxpipe",
+      biliBinaryPath: "bili",
+    });
+  }).pipe(Effect.provide(registryLayer));
+});
+
 const openOn = Effect.fn("openOn")(function* (instance: ProviderInstance) {
   const registry = yield* Effect.service(ProviderAdapterRegistry.ProviderAdapterRegistryV2).pipe(
     Effect.provide(

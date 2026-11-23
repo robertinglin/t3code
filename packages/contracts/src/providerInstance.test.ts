@@ -22,6 +22,7 @@ describe("ProviderInstanceConfig agent launcher", () => {
   it("keeps an explicit per-instance launcher and leaves unset values inherited", () => {
     const decode = Schema.decodeUnknownSync(ProviderInstanceConfig);
     expect(decode({ driver: "codex", agentLauncher: "bili" }).agentLauncher).toBe("bili");
+    expect(decode({ driver: "acpRegistry", agentLauncher: "pxpipe" }).agentLauncher).toBe("pxpipe");
     expect(decode({ driver: "codex" }).agentLauncher).toBeUndefined();
   });
 });

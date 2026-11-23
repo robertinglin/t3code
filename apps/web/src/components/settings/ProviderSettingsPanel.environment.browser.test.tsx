@@ -517,6 +517,38 @@ describe("EnvironmentProviderSettings provider list", () => {
     );
   });
 
+  it("defaults Gemini CLI to pxpipe and lets the provider override select it", async () => {
+    await setup();
+    const instanceId = ProviderInstanceId.make("acpRegistry_gemini");
+    const instance = {
+      driver: ProviderDriverKind.make("acpRegistry"),
+      config: { agentId: "gemini" },
+    };
+    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, providerInstances: { [instanceId]: instance } };
+    await setProviders([
+      {
+        ...provider(),
+        instanceId,
+        driver: ProviderDriverKind.make("acpRegistry"),
+      },
+    ]);
+    await using _screen = await render(panel({ targetInstanceId: instanceId }));
+    const launcher = page.getByRole("combobox", { name: "Agent launcher" });
+    await expect.element(launcher).toHaveTextContent("pxpipe");
+    await userEvent.click(launcher);
+    await expect.element(page.getByRole("option", { name: "Default (pxpipe)" })).toBeVisible();
+    await userEvent.click(page.getByRole("option", { name: "pxpipe" }));
+
+    expect(state.mutateProviderInstance).toHaveBeenCalledWith(
+      {
+        operation: "upsert",
+        instanceId,
+        instance: { ...instance, agentLauncher: "pxpipe" },
+      },
+      {},
+    );
+  });
+
   it("selects a provider when its row is clicked near the edge", async () => {
     await setup();
     await setProviders([provider()]);

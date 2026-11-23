@@ -52,6 +52,31 @@ it("uses the configured bili executable and preserves agent argument order", () 
   );
 });
 
+it("runs Gemini through pxpipe warp without changing its environment or arguments", () => {
+  const env = { API_TOKEN: "test" };
+  assert.deepEqual(
+    resolveAgentLaunch(
+      {
+        agent: "gemini",
+        executable: "/managed/gemini",
+        args: ["--acp"],
+        cwd: "/repo",
+        env,
+      },
+      { ...settings({ launcher: "native" }), launcher: "pxpipe" },
+    ),
+    {
+      _tag: "Resolved",
+      launch: {
+        command: "pxpipe",
+        args: ["warp", "--", "/managed/gemini", "--acp"],
+        cwd: "/repo",
+        env,
+      },
+    },
+  );
+});
+
 it("uses bili's Qwen proxy lane to launch Cline's ACP executable", () => {
   assert.deepEqual(
     resolveAgentLaunch(

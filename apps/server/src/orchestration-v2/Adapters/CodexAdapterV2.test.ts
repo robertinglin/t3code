@@ -12748,6 +12748,10 @@ describe("codexDynamicToolOutput", () => {
 describe("CodexAdapterV2 app-server process", () => {
   it.effect("runs bili inside the agent scope wrapper", () =>
     Effect.gen(function* () {
+      const biliEnvironment = {
+        BILI_CONFIG_FILE: "/home/test/.config/billion-context/billion-context.json",
+        BILI_SESSIONS_DIR: "/home/test/.local/share/billion-context/sessions",
+      };
       const scope = AgentScope.of({
         ...(yield* AgentScope),
         wrap: ({ command, args }) =>
@@ -12756,6 +12760,7 @@ describe("CodexAdapterV2 app-server process", () => {
       const command = yield* CodexAdapterV2.makeCodexAppServerSpawnCommand({
         command: "/usr/bin/codex",
         args: ["app-server"],
+        env: biliEnvironment,
       }).pipe(
         Effect.provideService(AgentScope, scope),
         Effect.provideService(AgentLauncherPolicy, { launcher: "bili", biliBinaryPath: "bili" }),
@@ -12766,6 +12771,7 @@ describe("CodexAdapterV2 app-server process", () => {
         [command.command, ...command.args],
         ["/bin/sh", "bili", "--bin", "/usr/bin/codex", "codex", "app-server"],
       );
+      assert.deepStrictEqual(command.options.env, biliEnvironment);
     }),
   );
 

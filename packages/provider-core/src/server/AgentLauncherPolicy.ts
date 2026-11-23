@@ -1,6 +1,11 @@
 import type { AgentLauncherSettings } from "@t3tools/contracts/settings";
 import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
+import { resolvePxpipeLaunch } from "./pxpipeLauncher.ts";
+
+export type AgentLauncherPolicySettings = Omit<AgentLauncherSettings, "launcher"> & {
+  readonly launcher: AgentLauncherSettings["launcher"] | "pxpipe";
+};
 
 export class AgentLaunchUnsupportedError extends Schema.TaggedError<AgentLaunchUnsupportedError>()(
   "AgentLaunchUnsupportedError",
@@ -33,7 +38,7 @@ export type AgentLaunchResolution =
 
 export function resolveAgentLaunch(
   request: AgentLaunchRequest,
-  settings: AgentLauncherSettings,
+  settings: AgentLauncherPolicySettings,
 ): AgentLaunchResolution {
   if (settings.launcher === "native") {
     return {
@@ -45,6 +50,10 @@ export function resolveAgentLaunch(
         ...(request.env === undefined ? {} : { env: request.env }),
       },
     };
+  }
+
+  if (settings.launcher === "pxpipe") {
+    return { _tag: "Resolved", launch: resolvePxpipeLaunch(request) };
   }
 
   if (request.biliCompatibility?.supported !== true) {
@@ -76,5 +85,5 @@ export function resolveAgentLaunch(
 
 export class AgentLauncherPolicy extends Context.Service<
   AgentLauncherPolicy,
-  AgentLauncherSettings
+  AgentLauncherPolicySettings
 >()("@t3tools/provider-core/server/AgentLauncherPolicy") {}

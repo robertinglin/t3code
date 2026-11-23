@@ -7,7 +7,6 @@ import * as Effect from "effect/Effect";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as EffectAcpErrors from "effect-acp/errors";
 
-import type { AgentLauncherSettings } from "@t3tools/contracts/settings";
 import * as AgentLauncherPolicy from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import type { AcpRegistrySettings } from "../settings.ts";
@@ -97,7 +96,7 @@ export const prepareBiliRegistrySpawn = Effect.fn("BiliLaunchers.prepareRegistry
   function* (input: {
     readonly settings: AcpRegistrySettings;
     readonly spawn: AcpSessionRuntime.AcpSpawnInput;
-    readonly policy: AgentLauncherSettings;
+    readonly policy: AgentLauncherPolicy.AgentLauncherPolicySettings;
   }): Effect.fn.Return<AcpSessionRuntime.AcpSpawnInput, EffectAcpErrors.AcpSpawnError> {
     const biliLauncher = resolveBiliRegistryLauncher(input.settings);
     if (

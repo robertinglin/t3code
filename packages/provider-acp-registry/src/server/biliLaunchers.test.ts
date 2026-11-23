@@ -134,6 +134,20 @@ describe("resolveBiliRegistryLauncher", () => {
     }),
   );
 
+  it.effect("wraps Gemini CLI with pxpipe warp", () =>
+    Effect.gen(function* () {
+      const result = yield* prepareBiliRegistrySpawn({
+        settings: decodeSettings({ agentId: "gemini" }),
+        spawn: { command: "/managed/gemini", args: ["--acp"] },
+        policy: { ...decodeLauncherSettings({}), launcher: "pxpipe" },
+      });
+      expect(result).toEqual({
+        command: "pxpipe",
+        args: ["warp", "--", "/managed/gemini", "--acp"],
+      });
+    }),
+  );
+
   it.effect("refuses an unverified custom ACP launch in Bili mode", () =>
     Effect.gen(function* () {
       const result = yield* prepareBiliRegistrySpawn({

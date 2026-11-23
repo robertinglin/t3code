@@ -19,6 +19,10 @@
       "types": "./src/server/AgentLauncherPolicy.ts",
       "import": "./src/server/AgentLauncherPolicy.ts"
     },
+    "./server/pxpipeLauncher": {
+      "types": "./src/server/pxpipeLauncher.ts",
+      "import": "./src/server/pxpipeLauncher.ts"
+    },
     "./server/attachmentPrompt": {
       "types": "./src/server/attachmentPrompt.ts",
       "import": "./src/server/attachmentPrompt.ts"

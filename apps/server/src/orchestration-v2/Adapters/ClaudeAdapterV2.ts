@@ -189,7 +189,7 @@ import * as PortScanner from "../../preview/PortScanner.ts";
 import * as ProcessRunner from "../../processRunner.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import { AgentLauncherPolicy } from "@t3tools/provider-core/server/AgentLauncherPolicy";
-import type { AgentLauncherSettings } from "@t3tools/contracts/settings";
+import type { AgentLauncherPolicySettings } from "@t3tools/provider-core/server/AgentLauncherPolicy";
 import { AgentLaunchUnsupportedError, resolveAgentLaunch } from "../../provider/AgentLauncher.ts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
@@ -700,7 +700,7 @@ export type ClaudeAgentSdkQueryOptions = Omit<
 
 export interface ClaudeAgentSdkQueryOpenInput {
   readonly resume?: true;
-  readonly launcherSettings?: AgentLauncherSettings;
+  readonly launcherSettings?: AgentLauncherPolicySettings;
   readonly options: ClaudeAgentSdkQueryOptions;
   readonly threadId: ThreadId;
   readonly providerSessionId: OrchestrationV2ProviderSession["id"];
