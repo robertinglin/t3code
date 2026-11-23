@@ -12,6 +12,10 @@ your project, and enable Antigravity. Install its runtime there, then choose
 account access and load models before starting a thread. Once the runtime is installed,
 you can also sign in from **Settings > Providers** in the mobile app.
 
+Antigravity uses pxpipe by default when the pxpipe proxy is running. See
+[Context launchers](./context-launchers.md) to install and start it, or choose **Native** in the
+Antigravity instance's **Agent launcher** setting to bypass pxpipe.
+
 Installation continues if you leave settings or reconnect. Setup requires
 permission to operate the environment; update an older server if it does not offer
 Antigravity setup.

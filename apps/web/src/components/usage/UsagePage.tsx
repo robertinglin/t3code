@@ -78,6 +78,7 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { UsageLimitsSection } from "./UsageLimits";
+import { UsageCompression } from "./UsageCompression";
 import { UsagePriceOverrides } from "./UsagePriceOverrides";
 import { UsageProviderChart } from "./UsageProviderChart";
 import { SpeedPremium, UsageModelDialog } from "./UsageModelDialog";
@@ -113,6 +114,14 @@ function isUsageMetric(value: string | null | undefined): value is UsageMetric {
 
 function isUsageWindowDays(value: number): value is UsagePagePreferences["windowDays"] {
   return WINDOW_OPTIONS.some((option) => option.days === value);
+}
+
+function isLoopbackServerUrl(value: string): boolean {
+  try {
+    return ["127.0.0.1", "localhost", "[::1]"].includes(new URL(value).hostname);
+  } catch {
+    return false;
+  }
 }
 
 const providerLabel = (provider: UsageProviderKind) => PROVIDER_PRESENTATION[provider].label;
@@ -184,9 +193,12 @@ export function UsagePage() {
   const shortcutTitle = (
     option: (typeof METRIC_OPTIONS)[number] | (typeof WINDOW_OPTIONS)[number],
   ) => {
-    const shortcut = shortcutLabelForCommand(keybindings, option.command, {
-      context: { usagePageOpen: true },
-    });
+    const shortcut =
+      "command" in option
+        ? shortcutLabelForCommand(keybindings, option.command, {
+            context: { usagePageOpen: true },
+          })
+        : null;
     return shortcut
       ? gt("{label} ({shortcut})", { label: m(option.label), shortcut })
       : m(option.label);
@@ -201,6 +213,7 @@ export function UsagePage() {
   }));
   const metric = preferences.metric;
   const showingLimits = metric === "limits";
+  const showingCompression = metric === "compression";
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [limitsNow, setLimitsNow] = useState(() => Date.now());
   const refreshingRef = useRef(false);
@@ -221,11 +234,19 @@ export function UsagePage() {
   const merged = shown?.merged ?? answeredUsage;
   const shownWindow = shown?.window ?? window;
   const shownHourly = shownWindow.resolution === "hour";
-  const refreshingUsage = isRefreshing && !showingLimits;
+  const refreshingUsage = isRefreshing && !showingLimits && !showingCompression;
   const showingKept = shown !== null && shown.window !== window;
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
   const presentationsWithProviders = useAtomValue(
     environmentPresentations.presentationsWithProvidersAtom,
+  );
+  const dashboardEnvironmentIds = new Set(
+    [...presentations].flatMap(([environmentId, presentation]) =>
+      presentation.entry.target._tag === "PrimaryConnectionTarget" &&
+      isLoopbackServerUrl(presentation.entry.target.httpBaseUrl)
+        ? [environmentId]
+        : [],
+    ),
   );
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
@@ -282,7 +303,9 @@ export function UsagePage() {
       return;
 
     const command = resolveUsageShortcut(event, keybindings);
-    const metricOption = METRIC_OPTIONS.find((option) => option.command === command);
+    const metricOption = METRIC_OPTIONS.find(
+      (option) => "command" in option && option.command === command,
+    );
     const periodOption = WINDOW_OPTIONS.find((option) => option.command === command);
     if (!metricOption && !periodOption) return;
 
@@ -384,7 +407,7 @@ export function UsagePage() {
             selectedEnvironments={selectedEnvironments}
             selectedEnvironmentIds={selectedEnvironmentIds}
             onSelectionChange={setSelectedEnvironmentIds}
-            showUsageStatus={!showingLimits}
+            showUsageStatus={!showingLimits && !showingCompression}
             refreshing={refreshingUsage}
             isPartial={isPartial}
             duplicateSources={merged.duplicateSources}
@@ -392,15 +415,19 @@ export function UsagePage() {
             onOpenModelPrices={() => setPriceDialog({})}
           />
         </WorkspaceBreadcrumbItem>
-        <WorkspaceBreadcrumbSeparator />
-        <WorkspaceBreadcrumbItem current className="min-w-10">
-          <UsageProviderFilter
-            hiddenProviders={hiddenProviders}
-            onChange={(next) => updatePreferences({ hiddenProviders: next })}
-          />
-        </WorkspaceBreadcrumbItem>
+        {!showingCompression ? (
+          <>
+            <WorkspaceBreadcrumbSeparator />
+            <WorkspaceBreadcrumbItem current className="min-w-10">
+              <UsageProviderFilter
+                hiddenProviders={hiddenProviders}
+                onChange={(next) => updatePreferences({ hiddenProviders: next })}
+              />
+            </WorkspaceBreadcrumbItem>
+          </>
+        ) : null}
       </WorkspaceBreadcrumb>
-      {!showingLimits ? (
+      {!showingLimits && !showingCompression ? (
         <span className="hidden min-w-0 truncate text-xs text-muted-foreground @7xl/usage-header:block">
           {windowLabel}
         </span>
@@ -408,7 +435,7 @@ export function UsagePage() {
       <div className="ms-auto hidden shrink-0 items-center justify-end gap-2 @4xl/usage-header:flex">
         {/* Limits are always current, so they have no period. The period sits before the metric
             tabs so dropping it never moves them. */}
-        {showingLimits ? null : (
+        {showingLimits || showingCompression ? null : (
           <ToggleGroup
             aria-label={gt("Usage period")}
             variant="segmented"
@@ -440,19 +467,21 @@ export function UsagePage() {
             </Toggle>
           ))}
         </ToggleGroup>
-        <Button
-          onClick={refreshWindow}
-          aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
-          aria-busy={isRefreshing}
-          disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshIcon size="sm" refreshing={isRefreshing} />
-        </Button>
+        {showingCompression ? null : (
+          <Button
+            onClick={refreshWindow}
+            aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
+            aria-busy={isRefreshing}
+            disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <RefreshIcon size="sm" refreshing={isRefreshing} />
+          </Button>
+        )}
       </div>
       <div className="ms-auto flex shrink-0 items-center justify-end gap-1 @4xl/usage-header:hidden">
-        {showingLimits ? null : (
+        {showingLimits || showingCompression ? null : (
           <Select value={String(windowDays)} onValueChange={(value) => selectWindow(Number(value))}>
             <SelectTrigger
               aria-label={gt("Usage period")}
@@ -497,16 +526,18 @@ export function UsagePage() {
             ))}
           </SelectPopup>
         </Select>
-        <Button
-          onClick={refreshWindow}
-          aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
-          aria-busy={isRefreshing}
-          disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshIcon size="sm" refreshing={isRefreshing} />
-        </Button>
+        {showingCompression ? null : (
+          <Button
+            onClick={refreshWindow}
+            aria-label={showingLimits ? gt("Refresh limits") : gt("Refresh usage")}
+            aria-busy={isRefreshing}
+            disabled={isRefreshing || (!showingLimits && !canReadDiagnostics)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <RefreshIcon size="sm" refreshing={isRefreshing} />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -526,11 +557,20 @@ export function UsagePage() {
                 {environments.length === 0
                   ? showingLimits
                     ? gt("Connect an environment to see limits.")
-                    : gt("Connect an environment to see usage.")
+                    : showingCompression
+                      ? gt("Connect an environment to see compression stats.")
+                      : gt("Connect an environment to see usage.")
                   : showingLimits
                     ? gt("Select an environment to see limits.")
-                    : gt("Select an environment to see usage.")}
+                    : showingCompression
+                      ? gt("Select an environment to see compression stats.")
+                      : gt("Select an environment to see usage.")}
               </p>
+            ) : showingCompression ? (
+              <UsageCompression
+                environments={selectedEnvironments}
+                dashboardEnvironmentIds={dashboardEnvironmentIds}
+              />
             ) : showingLimits ? (
               <UsageLimitsSection
                 selectedEnvironmentIds={selectedEnvironmentIds}
@@ -571,7 +611,7 @@ export function UsagePage() {
           </WorkspacePageContainer>
         </ScrollArea>
       </div>
-      {showingLimits ? null : (
+      {showingLimits || showingCompression ? null : (
         <UsageModelDialogHost
           models={merged.models}
           environments={selectedEnvironments}

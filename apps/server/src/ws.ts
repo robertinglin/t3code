@@ -183,6 +183,7 @@ import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
 import { userFacingDispatchErrorMessage } from "./orchestration-v2/UserFacingErrors.ts";
 import * as ProviderRegistry from "./provider/ProviderRegistry.ts";
+import * as PxpipeStats from "./provider/PxpipeStats.ts";
 import * as SecretCheck from "./secrets/SecretCheck.ts";
 import * as AcpRegistrySessions from "./provider/AcpRegistrySessions.ts";
 import * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
@@ -2401,6 +2402,7 @@ export const layerWsRpc = (
             workspaceSnapshotsOnDemand: false,
             deferNetworkDiscovery: false,
           }),
+        [WS_METHODS.serverGetPxpipeStats]: (_input) => PxpipeStats.read,
         [WS_METHODS.serverSearchAcpRegistry]: (input) =>
           acpRegistryCatalog
             .search(input)

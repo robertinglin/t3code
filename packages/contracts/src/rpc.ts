@@ -591,6 +591,7 @@ export const WS_METHODS = {
 
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
+  serverGetPxpipeStats: "server.getPxpipeStats",
   serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
@@ -776,6 +777,23 @@ const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
   payload: Schema.Struct({}),
   success: ServerConfig,
   error: Schema.Union([KeybindingsConfigError, ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+const PxpipeStats = Schema.Struct({
+  available: Schema.Boolean,
+  baselineTokens: Schema.Number,
+  measuredTokens: Schema.Number,
+  measuredEvents: Schema.Number,
+  savedTokens: Schema.Number,
+  totalRequests: Schema.Number,
+  compressedRequests: Schema.Number,
+  passthroughRequests: Schema.Number,
+});
+
+const WsServerGetPxpipeStatsRpc = Rpc.make(WS_METHODS.serverGetPxpipeStats, {
+  payload: Schema.Struct({}),
+  success: PxpipeStats,
+  error: EnvironmentAuthorizationError,
 });
 
 export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, {
@@ -2532,6 +2550,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsGuestShareCreateRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
+  WsServerGetPxpipeStatsRpc,
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsProviderConsumeResetCreditRpc,

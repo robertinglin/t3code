@@ -9,6 +9,9 @@ Agents that T3 Code supports as their own providers, such as Codex, Claude, Curs
 Pi, and [Antigravity](./providers-antigravity.md), don't appear in the Registry list. Enable them in
 **Settings → Providers** instead.
 
+For optional Bili or pxpipe launchers around supported agents, see
+[Context launchers](./context-launchers.md).
+
 T3 Code prefers the current ACP v2 preview protocol and uses its richer messages, usage, plans,
 configuration, compaction, and agent-terminal updates when the agent supports them. It also
 negotiates ACP v1 for Registry agents that have not migrated yet, so they continue to work through
