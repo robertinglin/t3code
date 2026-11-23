@@ -9,10 +9,11 @@ provider you have set up. When a model runs out of quota, the next one in the li
 Type `/coven-build <what the team should do>` in the composer. T3 Code opens a builder chat on the
 current model. The builder asks about the team you want and edits a draft coven while you talk.
 The draft shows up under **Coven** in the sidebar: open it to read or change it yourself, and
-select **Save coven** when it looks right. `/coven-build edit <name>` starts a builder chat on an
+select **Save coven** when it looks right. `/coven-edit [name]` starts a builder chat on an
 existing coven.
 
-You can also edit a coven directly with `/coven edit [name]`. The editor has four tabs:
+You can also edit a coven directly with `/coven edit [name]`, or pick **Coven editor** from the
+right panel's surface menu (shortcut E) to edit this thread's coven. The editor has four tabs:
 
 - **Roles**: each role, its model chain and its instructions.
 - **Governance**: gates, autonomy, limits and the workspace policy.
@@ -101,7 +102,7 @@ directory instead.
 | `/coven edit [name]`         | Open the editor.                                     |
 | `/coven export [name]`       | Copy the Markdown definition.                        |
 | `/coven-build <description>` | Start a builder chat for a new coven.                |
-| `/coven-build edit <name>`   | Start a builder chat for an existing coven.          |
+| `/coven-edit [name]`         | Revise a saved coven with the builder (no new coven). |
 
 ## Limits
 

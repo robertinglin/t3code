@@ -65,7 +65,7 @@ function describeRun(run: CovenRunView): string {
 }
 
 /**
- * App-owned `/coven` and `/coven-build` commands. Returns a runner that reports whether it
+ * App-owned `/coven`, `/coven-build` and `/coven-edit` commands. Returns a runner that reports whether it
  * handled the text; anything it does not recognize is sent to the provider as usual.
  */
 export function useCovenCommand(input: {

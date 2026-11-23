@@ -1999,7 +1999,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         }
         return;
       }
-      if (item.command === "coven" || item.command === "coven-build") {
+      if (
+        item.command === "coven" ||
+        item.command === "coven-build" ||
+        item.command === "coven-edit"
+      ) {
         const applied = applyPromptReplacement(
           trigger.rangeStart,
           trigger.rangeEnd,

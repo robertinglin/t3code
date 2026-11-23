@@ -48,6 +48,7 @@ import {
   ChevronRight,
   FileDiff,
   Files,
+  UserRoundPen,
   UsersRound,
   Globe2,
   MessagesSquare,
@@ -174,6 +175,8 @@ export interface RightPanelTabsProps {
   onAddCoven?: (() => void) | undefined;
   /** The bound coven's name, shown as the coven tab's title. */
   covenTitle?: string | null;
+  /** Opens the editor for this thread's coven. Absent where covens are not offered. */
+  onOpenCovenEditor?: (() => void) | undefined;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   children: ReactNode;
 }
@@ -360,6 +363,8 @@ function RightPanelEmptyState(props: {
   sideChatAvailable: boolean;
   sideChatDisabledReason: string | null;
   onAddCoven?: (() => void) | undefined;
+  onOpenCovenEditor?: (() => void) | undefined;
+  covenTitle?: string | null | undefined;
 }) {
   const gt = useGT();
   const messages = useMessages();
@@ -447,6 +452,21 @@ function RightPanelEmptyState(props: {
             available: true,
             disabledReason: "",
             onClick: props.onAddCoven,
+          },
+        ]
+      : []),
+    ...(props.onOpenCovenEditor
+      ? [
+          {
+            label: msg("Coven editor"),
+            description: msg("Edit this thread's coven: roles, models, gates and limits."),
+            icon: UserRoundPen,
+            shortcut: "E",
+            available: Boolean(props.covenTitle),
+            disabledReason: messages(
+              msg("Use a coven in this thread first, with /coven change <name>."),
+            ),
+            onClick: props.onOpenCovenEditor,
           },
         ]
       : []),
@@ -1307,6 +1327,20 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           },
         ]
       : []),
+    ...(props.onOpenCovenEditor
+      ? [
+          {
+            label: msg("Coven editor"),
+            icon: UserRoundPen,
+            shortcut: "E",
+            available: Boolean(props.covenTitle),
+            disabledReason: messages(
+              msg("Use a coven in this thread first, with /coven change <name>."),
+            ),
+            onClick: props.onOpenCovenEditor,
+          },
+        ]
+      : []),
   ] as const;
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -1733,6 +1767,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddDevice={props.onAddDevice}
             onAddSideChat={props.onAddSideChat}
             onAddCoven={props.onAddCoven}
+            onOpenCovenEditor={props.onOpenCovenEditor}
+            covenTitle={props.covenTitle}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}

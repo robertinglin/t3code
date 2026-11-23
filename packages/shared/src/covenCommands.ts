@@ -14,10 +14,10 @@ export type CovenCommand =
   | { readonly kind: "export"; readonly name: string | null }
   | { readonly kind: "delete"; readonly name: string | null }
   | { readonly kind: "build"; readonly prompt: string }
-  | { readonly kind: "build-edit"; readonly name: string }
+  | { readonly kind: "build-edit"; readonly name: string | null }
   | { readonly kind: "invalid"; readonly message: string };
 
-const COVEN_COMMAND = /^\/(coven-build|coven)(?=\s|$)([\s\S]*)$/i;
+const COVEN_COMMAND = /^\/(coven-build|coven-edit|coven)(?=\s|$)([\s\S]*)$/i;
 
 function unquote(text: string): string {
   const trimmed = text.trim();
@@ -25,12 +25,14 @@ function unquote(text: string): string {
   return (quoted ? quoted[2]! : trimmed).trim();
 }
 
-/** True when the prompt is a `/coven` or `/coven-build` command the app handles itself. */
+/** True when the prompt is a `/coven`, `/coven-build` or `/coven-edit` command the app handles itself. */
 export function parseCovenCommand(prompt: string): CovenCommand | null {
   const match = COVEN_COMMAND.exec(prompt.trim());
   if (!match) return null;
   const command = match[1]!.toLowerCase();
   const rest = match[2]!.trim();
+  // Revises a saved coven with the builder; no name means this thread's coven.
+  if (command === "coven-edit") return { kind: "build-edit", name: unquote(rest) || null };
   if (command === "coven-build") {
     const edit = /^edit(?:\s+([\s\S]+))?$/i.exec(rest);
     if (edit) {
@@ -136,5 +138,5 @@ export const COVEN_HELP_TEXT = [
   "/coven export [name]: copy the definition",
   "/coven delete [name]: delete a coven and take it off every thread",
   "/coven-build <description>: start a new coven from a description",
-  "/coven-build edit <name>: revise a coven",
+  "/coven-edit [name]: revise a saved coven with the builder (no new coven)",
 ].join("\n");

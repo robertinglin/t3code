@@ -120,6 +120,12 @@ describe("parseCovenCommand", () => {
       kind: "build-edit",
       name: "sales",
     });
+    expect(parseCovenCommand('/coven-edit "Open Gemini"')).toEqual({
+      kind: "build-edit",
+      name: "Open Gemini",
+    });
+    expect(parseCovenCommand("/coven-edit")).toEqual({ kind: "build-edit", name: null });
+    expect(parseCovenCommand("/coven-editor")).toBeNull();
   });
 
   it("ignores other commands and flags unknown verbs", () => {

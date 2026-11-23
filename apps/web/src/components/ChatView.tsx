@@ -4206,6 +4206,9 @@ export default function ChatView(props: ChatViewProps) {
               ? () => useRightPanelStore.getState().open(activeThreadRef, "coven")
               : undefined
           }
+          onOpenCovenEditor={
+            isServerThread && activeThreadRef ? () => runCovenCommand("/coven edit") : undefined
+          }
           covenTitle={covenTabTitle}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}

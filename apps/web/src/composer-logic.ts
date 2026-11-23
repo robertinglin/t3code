@@ -26,7 +26,14 @@ import {
 } from "./keybindings";
 
 export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
-export type ComposerSlashCommand = "model" | "side" | "btw" | "clear" | "coven" | "coven-build";
+export type ComposerSlashCommand =
+  | "model"
+  | "side"
+  | "btw"
+  | "clear"
+  | "coven"
+  | "coven-build"
+  | "coven-edit";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
 export interface ComposerTrigger {

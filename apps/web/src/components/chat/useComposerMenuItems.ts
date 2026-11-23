@@ -276,6 +276,13 @@ export function useComposerMenuItems({
           label: "/coven-build",
           description: gt("Build a coven of agents with AI"),
         },
+        {
+          id: "slash:coven-edit",
+          type: "slash-command",
+          command: "coven-edit",
+          label: "/coven-edit",
+          description: gt("Revise a saved coven with AI"),
+        },
         ...(sideChatAvailable
           ? ([
               {
