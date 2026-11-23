@@ -8,7 +8,9 @@ import {
 import { renderCovenRunDocs } from "./covenRunDocs.ts";
 import { covenLeaderNote } from "./covenWorkerTask.ts";
 import {
+  approvePendingPlan,
   delegationRefusal,
+  isChatPlanApproval,
   runtimeWarningMinutes,
   initialRunState,
   toRunView,
@@ -58,6 +60,41 @@ describe("coven run state", () => {
     const state = initialRunState({ definition, leaderCandidateIndex: 0 });
     expect(state.status).toBe("awaiting_plan");
     expect(delegationRefusal(state, definition, "builder")).toMatch(/approve the plan/);
+  });
+
+  it("treats a short approving chat reply as plan approval", () => {
+    for (const reply of [
+      "Approved",
+      "approve",
+      "LGTM",
+      "Looks good, go ahead.",
+      "yes",
+      "ship it!",
+    ]) {
+      expect(isChatPlanApproval(reply)).toBe(true);
+    }
+    for (const reply of [
+      "Approved, but change slice 2 first",
+      "not approved",
+      "approve?",
+      "Can you explain the plan",
+      "",
+    ]) {
+      expect(isChatPlanApproval(reply)).toBe(false);
+    }
+    const now = "2026-11-23T12:00:00.000Z";
+    const waiting: CovenRunState = {
+      ...initialRunState({ definition, leaderCandidateIndex: 0 }),
+      plan: { text: "Slice 1", status: "proposed", proposedAt: now, decidedAt: null },
+      pendingApprovals: [
+        { id: "plan-1", kind: "plan", title: "Approve the plan", body: "Slice 1", createdAt: now },
+      ],
+    };
+    const approved = approvePendingPlan(waiting, now);
+    expect(approved?.status).toBe("running");
+    expect(approved?.plan?.status).toBe("approved");
+    expect(approved?.pendingApprovals).toEqual([]);
+    expect(approvePendingPlan(approved!, now)).toBeNull();
   });
 
   it("lets only reviewers work until the implementation gate passes", () => {

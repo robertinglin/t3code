@@ -39,7 +39,8 @@ In a coven thread, the thread's agent is the leader. A coven stays with its thre
 covens: finishing a piece of work doesn't end it, and the next message continues with the same team.
 Its first turn starts the coven's run. If the coven has
 `autonomy.initialPlanApproval`, the leader proposes a plan and waits; approve or reject it in the
-sidebar or with `/coven approve` and `/coven reject`. The leader then hands work to worker roles.
+sidebar, with `/coven approve` and `/coven reject`, or by replying with a short "approved", "lgtm" or
+"go ahead". The leader then hands work to worker roles.
 Each task opens a child thread on the role's first available model, with the role's instructions,
 the mission and the run's notes. The generic delegation and thread tools are turned off in coven
 threads, so work can't bypass the team's rules. Claude's own built-in subagents are turned off too.

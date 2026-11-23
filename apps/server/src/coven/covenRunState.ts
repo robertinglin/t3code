@@ -207,3 +207,28 @@ export function delegationRefusal(
 export function runtimeWarningMinutes(limitMinutes: number): number {
   return Math.min(20, Math.floor(limitMinutes / 4));
 }
+
+const CHAT_APPROVAL =
+  /^(?:i\s+)?(?:approved?|lgtm|looks good(?: to me)?|sounds good|go ahead|go for it|ship it|yes|yep|yeah|ok(?:ay)?)\b/u;
+const CHAT_HEDGE = /\b(?:not|don'?t|no|but|except|instead|change|wait|before)\b|\?/u;
+
+/** A short, unhedged "approved" / "lgtm" / "go ahead" reply from the user. */
+export function isChatPlanApproval(text: string): boolean {
+  const reply = text.trim().toLowerCase();
+  return (
+    reply.length > 0 && reply.length <= 80 && CHAT_APPROVAL.test(reply) && !CHAT_HEDGE.test(reply)
+  );
+}
+
+/** The run with its pending plan approved, or null when no plan is waiting on the user. */
+export function approvePendingPlan(state: CovenRunState, now: string): CovenRunState | null {
+  const approval = state.pendingApprovals.find((candidate) => candidate.kind === "plan");
+  if (approval === undefined) return null;
+  return {
+    ...state,
+    pendingApprovals: state.pendingApprovals.filter((candidate) => candidate.id !== approval.id),
+    plan: state.plan ? { ...state.plan, status: "approved", decidedAt: now } : null,
+    status: state.status === "awaiting_plan" ? "running" : state.status,
+    statusReason: null,
+  };
+}

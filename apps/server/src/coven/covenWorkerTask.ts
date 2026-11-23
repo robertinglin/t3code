@@ -59,6 +59,8 @@ export function covenLeaderNote(input: {
       lines.push(
         `The run is paused (${run.state.statusReason ?? "by the user"}). Don't delegate until it resumes.`,
       );
+    } else if (status === "running" && run.state.plan?.status === "approved") {
+      lines.push("The user approved your plan, so delegate it with coven_delegate_role.");
     } else if (status === "awaiting_gate") {
       lines.push(`The run is waiting on a gate: ${run.state.statusReason ?? ""}`);
     }

@@ -35,6 +35,7 @@ import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../config.ts";
 import * as CovenService from "../coven/CovenService.ts";
+import { approvePendingPlan, isChatPlanApproval } from "../coven/covenRunState.ts";
 import { covenLeaderNote } from "../coven/covenWorkerTask.ts";
 import {
   CLAUDE_PROVIDER,
@@ -1048,12 +1049,35 @@ export const layer: Layer.Layer<
         restartCancelledWork.length === 0
           ? ""
           : restartCancelledBackgroundWorkNote(restartCancelledWork);
-      const covenRun =
+      const ensuredCovenRun =
         covenScope?.kind === "leader" && Option.isSome(covens)
           ? yield* covens.value
               .ensureRun(projection.thread.id)
               .pipe(Effect.orElseSucceed(() => null))
           : null;
+      // "Approved" in chat counts the same as the Approve button while a plan waits on the user.
+      const covenRun =
+        ensuredCovenRun !== null &&
+        Option.isSome(covens) &&
+        providerMessage.createdBy === "user" &&
+        isChatPlanApproval(providerMessage.text)
+          ? yield* covens.value
+              .updateRun(ensuredCovenRun.id, (record) =>
+                Effect.gen(function* () {
+                  const now = DateTime.formatIso(yield* DateTime.now);
+                  const state = approvePendingPlan(record.state, now);
+                  if (state === null) return { state: record.state, result: record };
+                  return {
+                    state,
+                    events: [
+                      { kind: "approval.plan-approved", summary: "You approved the plan in chat." },
+                    ],
+                    result: { ...record, state },
+                  };
+                }),
+              )
+              .pipe(Effect.orElseSucceed(() => ensuredCovenRun))
+          : ensuredCovenRun;
       const covenNote =
         covenScope?.kind === "leader" ? covenLeaderNote({ ...covenScope, run: covenRun }) : "";
       const tokenCap = yield* handoffTokenCapConfig.pipe(
