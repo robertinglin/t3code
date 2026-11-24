@@ -805,7 +805,7 @@ const make = Effect.gen(function* () {
         (candidate) => candidate.id === input.gateId,
       );
       if (gate === undefined) return yield* notFound(`This coven has no gate ${input.gateId}.`);
-      if (scope.kind === "leader" && run.state.userLed === true) {
+      if (scope.kind === "leader" && run.state.pickedLeader !== undefined) {
         return yield* policyDenied(
           `You lead with the user's model, so you don't vote. Delegate the review to the voters (${covenGateElectorate(gate).join(", ")}) with coven_delegate_role.`,
         );
@@ -1316,7 +1316,7 @@ const make = Effect.gen(function* () {
       usageLimitResetAt: shell.usageLimitResetAt ?? null,
     });
     // The user's own model ran out; changing it again is the user's call.
-    if (kind !== "quota" || run.state.userLed === true) return;
+    if (kind !== "quota" || run.state.pickedLeader !== undefined) return;
     const definition = yield* covens.definitionAt(run.covenId, run.revision);
     if (definition === null) return;
     const now = yield* nowIso;

@@ -217,8 +217,8 @@ const makeHandlers = (
             yourRole:
               covenScope.kind === "worker"
                 ? covenScope.roleId
-                : run?.state.userLed
-                  ? "leader (the user's selected model; the lead role is a subagent you can delegate to)"
+                : run?.state.pickedLeader
+                  ? "orchestrator (the user picked your model; the lead role keeps its other duties as a subagent)"
                   : leaderRole(definition).id,
             mission: definition.instructions.mission,
             sharedGuidance: definition.instructions.sharedGuidance,

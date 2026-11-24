@@ -1060,7 +1060,8 @@ export const layer: Layer.Layer<
               .ensureRun(projection.thread.id)
               .pipe(Effect.orElseSucceed(() => null))
           : null;
-      // Whoever the user picked leads. A model outside the lead role's makes the lead a subagent.
+      // The model the user picked orchestrates. If it isn't one of the lead role's, the lead role
+      // keeps its other duties (reviews, say) as a subagent.
       const ensuredCovenRun =
         startedCovenRun !== null && Option.isSome(covens)
           ? yield* Effect.gen(function* () {
@@ -1069,23 +1070,36 @@ export const layer: Layer.Layer<
                   startedCovenRun.covenId,
                   startedCovenRun.revision,
                 )) ?? covenScope!.definition;
-              const userLed = !isLeadModel(definition, run.modelSelection);
-              if ((startedCovenRun.state.userLed === true) === userLed) return startedCovenRun;
+              const picked = isLeadModel(definition, run.modelSelection)
+                ? undefined
+                : {
+                    providerInstanceId: run.modelSelection.instanceId,
+                    modelId: run.modelSelection.model,
+                  };
+              const current = startedCovenRun.state.pickedLeader;
+              if (
+                current?.providerInstanceId === picked?.providerInstanceId &&
+                current?.modelId === picked?.modelId
+              ) {
+                return startedCovenRun;
+              }
               const lead = leaderRole(definition).name;
-              return yield* covens.value.updateRun(startedCovenRun.id, (record) =>
-                Effect.succeed({
-                  state: { ...record.state, userLed },
+              return yield* covens.value.updateRun(startedCovenRun.id, (record) => {
+                const { pickedLeader: _old, ...base } = record.state;
+                const next = picked === undefined ? base : { ...base, pickedLeader: picked };
+                return Effect.succeed({
+                  state: next,
                   events: [
-                    userLed
+                    picked
                       ? {
-                          kind: "leader.user-model",
-                          summary: `Your selected model (${run.modelSelection.model}) leads; ${lead} works as a subagent.`,
+                          kind: "leader.picked-model",
+                          summary: `${picked.modelId} orchestrates; ${lead} keeps its other duties as a subagent.`,
                         }
-                      : { kind: "leader.lead-model", summary: `${lead} leads again.` },
+                      : { kind: "leader.lead-model", summary: `${lead} orchestrates again.` },
                   ],
-                  result: { ...record, state: { ...record.state, userLed } },
-                }),
-              );
+                  result: { ...record, state: next },
+                });
+              });
             }).pipe(Effect.orElseSucceed(() => startedCovenRun))
           : startedCovenRun;
       // "Approved" in chat counts the same as the Approve button while a plan waits on the user.

@@ -132,7 +132,10 @@ describe("coven run state", () => {
     );
     const lead = leaderRole(definition).id;
     expect(delegatableRoles(definition, state).map((role) => role.id)).not.toContain(lead);
-    const userLed = { ...state, userLed: true };
+    const userLed = {
+      ...state,
+      pickedLeader: { providerInstanceId: "claudeAgent", modelId: "claude-opus-5-5" },
+    };
     expect(delegatableRoles(definition, userLed).map((role) => role.id)).toContain(lead);
     const note = covenLeaderNote({
       binding: { name: "Review first", revision: 1 },
@@ -147,7 +150,8 @@ describe("coven run state", () => {
         state: userLed,
       },
     });
-    expect(note).toContain(`${lead} is one of your subagents`);
+    expect(note).toContain("picked you as its orchestrator");
+    expect(note).toContain(`lead role ${lead} no longer leads`);
     expect(
       toRunView(
         {
@@ -160,8 +164,8 @@ describe("coven run state", () => {
           state: userLed,
         },
         [],
-      ).userLed,
-    ).toBe(true);
+      ).pickedLeader?.modelId,
+    ).toBe("claude-opus-5-5");
   });
 
   it("tells the leader where each gate stands so late results aren't handled twice", () => {

@@ -23,8 +23,35 @@ export interface CovenMember {
   }>;
 }
 
-/** The leader first, then workers in definition order. */
+/** Stands in for the model the user picked to orchestrate in place of the lead role. */
+export const PICKED_LEADER_ROLE_ID = "picked-leader";
+
+/**
+ * The leader first, then workers in definition order. When the user picked a model of their own
+ * to orchestrate, it leads and the lead role stays on as a member for its other duties.
+ */
 export function covenMembers(
+  definition: CovenDefinition | null,
+  summary: CovenSummary | null,
+  run: CovenRunView | null = null,
+): CovenMember[] {
+  const roster = rosterMembers(definition, summary);
+  const picked = run?.pickedLeader;
+  if (picked === undefined) return roster;
+  return [
+    {
+      roleId: PICKED_LEADER_ROLE_ID,
+      name: picked.modelId,
+      kind: "orchestrator",
+      responsibility: "Orchestrates the coven: the model you picked for this thread.",
+      instructions: "",
+      candidates: [picked],
+    },
+    ...roster.map((member) => ({ ...member, kind: "worker" as const })),
+  ];
+}
+
+function rosterMembers(
   definition: CovenDefinition | null,
   summary: CovenSummary | null,
 ): CovenMember[] {
@@ -289,7 +316,7 @@ export function memberModel(
   const primary = member.candidates[0];
   let current: { providerInstanceId: string; modelId: string } | undefined = primary;
   if (run !== null && member.kind === "orchestrator") {
-    current = run.leader;
+    current = run.pickedLeader ?? run.leader;
   } else if (run !== null) {
     const attempt = latestFirst(
       run.tasks.filter((task) => task.roleId === member.roleId),

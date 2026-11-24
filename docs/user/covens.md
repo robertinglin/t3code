@@ -33,9 +33,9 @@ holds the mission, shared guidance, and a `## Role: <id>` section for each role.
 Pick a coven under **Coven** at the bottom of the sidebar (type to search by name, alias or
 description), or type `/coven change <name>`. The
 thread switches to the leader's model the first time you pick the coven. After that, the model is
-yours: pick another one in the composer and it leads the coven instead. The lead role then works as
-a subagent your model hands work to (reviews, for example), like any other role, and votes on its
-gates in place of your model. Choose **No coven**, or type `/coven off`, to go back to a
+yours: pick another one in the composer and it becomes the coven's orchestrator. The lead role
+stops leading but keeps its other duties: if it was "lead + reviewer", your model hands it the
+reviews as a subagent, and it still votes on its gates. The sidebar shows your model as the leader. Choose **No coven**, or type `/coven off`, to go back to a
 single agent. Switching covens, or turning the coven off, cancels any work still in flight. Names match by
 id, slug, name or alias, and a unique prefix is enough.
 

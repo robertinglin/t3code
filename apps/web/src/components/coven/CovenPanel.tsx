@@ -179,7 +179,7 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
     );
   }
 
-  const members = covenMembers(definition, summary);
+  const members = covenMembers(definition, summary, run);
   const names = new Map(members.map((member) => [member.roleId, member.name]));
   const nameOf = (roleId: string) => names.get(roleId) ?? roleId;
   const focused = members.find((member) => member.roleId === focusedRoleId) ?? null;

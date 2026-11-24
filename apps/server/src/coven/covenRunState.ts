@@ -36,15 +36,20 @@ export interface CovenRunState {
   /** Gate rounds from earlier pieces of work, kept for the record. */
   readonly completedGates?: ReadonlyArray<CovenGateRound> | undefined;
   /**
-   * The user switched the leader thread to a model that isn't one of the lead role's. That model
-   * leads, and the lead role is a subagent it can delegate to like any worker.
+   * The model the user picked for the leader thread when it isn't one of the lead role's. It
+   * orchestrates; the lead role keeps its other duties (reviews, say) as a subagent.
    */
-  readonly userLed?: boolean | undefined;
+  readonly pickedLeader?: CovenModelRef | undefined;
   readonly tasks: ReadonlyArray<CovenTaskState>;
   readonly gates: ReadonlyArray<CovenGateRound>;
   readonly pendingApprovals: ReadonlyArray<CovenPendingApproval>;
   readonly summary: string | null;
   readonly docsPath: string | null;
+}
+
+export interface CovenModelRef {
+  readonly providerInstanceId: string;
+  readonly modelId: string;
 }
 
 export interface CovenRunRecord {
@@ -98,7 +103,7 @@ export function isLeadModel(
 /** Roles the leader can delegate to: the workers, plus the lead role when the user's model leads. */
 export function delegatableRoles(definition: CovenDefinition, state: CovenRunState) {
   return definition.frontMatter.roles.filter(
-    (role) => role.kind === "worker" || state.userLed === true,
+    (role) => role.kind === "worker" || state.pickedLeader !== undefined,
   );
 }
 
@@ -143,7 +148,7 @@ export function toRunView(
     statusReason: state.statusReason,
     plan: state.plan,
     leader: state.leader,
-    ...(state.userLed ? { userLed: true } : {}),
+    ...(state.pickedLeader ? { pickedLeader: state.pickedLeader } : {}),
     tasks: state.tasks.map(
       ({ clientRequestId: _c, candidateIndex: _i, transientRetries: _r, ...task }) => task,
     ),

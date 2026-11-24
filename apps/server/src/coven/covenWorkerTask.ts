@@ -22,6 +22,9 @@ export function buildCovenWorkerTask(input: {
     input.gateIds && input.gateIds.length > 0
       ? `You vote on these gates: ${input.gateIds.join(", ")}. When the leader asks for your verdict, call coven_gate_submit_vote.`
       : "",
+    role.kind === "orchestrator"
+      ? "The user picked another model to orchestrate this coven, so you don't lead or plan here: do this task in your other capacity (reviewing, for example)."
+      : "",
     "Do only this task. Don't delegate further. If you need the leader mid-task, use coven_report_to_leader. End with a short report for the coven leader: what you did, what changed, and anything unresolved.",
     `## Task\n\n${input.task}`,
   ];
@@ -36,7 +39,7 @@ export function covenLeaderNote(input: {
 }): string {
   const frontMatter = input.definition.frontMatter;
   const run = input.run ?? null;
-  const userLed = run?.state.userLed === true;
+  const userLed = run?.state.pickedLeader !== undefined;
   const workers = frontMatter.roles
     .filter((role) => role.kind === "worker" || userLed)
     .map((role) => `${role.id} (${role.responsibility})`)
@@ -45,7 +48,7 @@ export function covenLeaderNote(input: {
   const lead = frontMatter.roles.find((role) => role.kind === "orchestrator");
   const lines = [
     userLed
-      ? `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). The user picked you to lead it in place of its lead role, so ${lead?.id ?? "the lead role"} is one of your subagents: hand it the work it is responsible for (such as reviews) with coven_delegate_role instead of doing that work yourself.`
+      ? `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). The user picked you as its orchestrator: you lead, plan and delegate. Its lead role ${lead?.id ?? ""} no longer leads, but it keeps its other duties (reviews, for example) as a subagent: hand it that work with coven_delegate_role, and leave its gate votes to it.`
       : `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). You are its leader.`,
     workers === ""
       ? "It has no worker roles, so do the work yourself."
