@@ -229,7 +229,8 @@ export function MemberDetail(props: {
     null) as ThreadId | null;
   const parentShell = useThreadShell(threadRef);
   const cwd = parentShell?.worktreePath ?? undefined;
-  const isLead = member.kind === "orchestrator";
+  // When the user picks another model, the lead role works as a subagent in its own thread.
+  const isLead = member.kind === "orchestrator" && run?.userLed !== true;
 
   return (
     <div className="flex flex-col gap-4">

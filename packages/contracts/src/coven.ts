@@ -406,6 +406,8 @@ export const CovenRunView = Schema.Struct({
     providerInstanceId: Schema.String,
     modelId: Schema.String,
   }),
+  /** The user's selected model leads; the lead role works as a subagent. */
+  userLed: Schema.optional(Schema.Boolean),
   tasks: Schema.Array(CovenTask),
   gates: Schema.Array(CovenGateRound),
   pendingApprovals: Schema.Array(CovenPendingApproval),

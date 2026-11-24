@@ -35,7 +35,12 @@ import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../config.ts";
 import * as CovenService from "../coven/CovenService.ts";
-import { approvePendingPlan, isChatPlanApproval } from "../coven/covenRunState.ts";
+import {
+  approvePendingPlan,
+  isChatPlanApproval,
+  isLeadModel,
+  leaderRole,
+} from "../coven/covenRunState.ts";
 import { covenLeaderNote } from "../coven/covenWorkerTask.ts";
 import {
   CLAUDE_PROVIDER,
@@ -1049,12 +1054,40 @@ export const layer: Layer.Layer<
         restartCancelledWork.length === 0
           ? ""
           : restartCancelledBackgroundWorkNote(restartCancelledWork);
-      const ensuredCovenRun =
+      const startedCovenRun =
         covenScope?.kind === "leader" && Option.isSome(covens)
           ? yield* covens.value
               .ensureRun(projection.thread.id)
               .pipe(Effect.orElseSucceed(() => null))
           : null;
+      // Whoever the user picked leads. A model outside the lead role's makes the lead a subagent.
+      const ensuredCovenRun =
+        startedCovenRun !== null && Option.isSome(covens)
+          ? yield* Effect.gen(function* () {
+              const definition =
+                (yield* covens.value.definitionAt(
+                  startedCovenRun.covenId,
+                  startedCovenRun.revision,
+                )) ?? covenScope!.definition;
+              const userLed = !isLeadModel(definition, run.modelSelection);
+              if ((startedCovenRun.state.userLed === true) === userLed) return startedCovenRun;
+              const lead = leaderRole(definition).name;
+              return yield* covens.value.updateRun(startedCovenRun.id, (record) =>
+                Effect.succeed({
+                  state: { ...record.state, userLed },
+                  events: [
+                    userLed
+                      ? {
+                          kind: "leader.user-model",
+                          summary: `Your selected model (${run.modelSelection.model}) leads; ${lead} works as a subagent.`,
+                        }
+                      : { kind: "leader.lead-model", summary: `${lead} leads again.` },
+                  ],
+                  result: { ...record, state: { ...record.state, userLed } },
+                }),
+              );
+            }).pipe(Effect.orElseSucceed(() => startedCovenRun))
+          : startedCovenRun;
       // "Approved" in chat counts the same as the Approve button while a plan waits on the user.
       const covenRun =
         ensuredCovenRun !== null &&

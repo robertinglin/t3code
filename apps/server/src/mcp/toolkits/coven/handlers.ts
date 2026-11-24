@@ -22,6 +22,7 @@ import * as CovenControlService from "../../../coven/CovenControlService.ts";
 import * as CovenService from "../../../coven/CovenService.ts";
 import {
   delegationRefusal,
+  delegatableRoles,
   leaderRole,
   type CovenRunRecord,
   type CovenTaskState,
@@ -213,7 +214,12 @@ const makeHandlers = (
             id: frontMatter.id,
             name: frontMatter.name,
             revision: run?.revision ?? covenScope.binding.revision,
-            yourRole: covenScope.kind === "leader" ? leaderRole(definition).id : covenScope.roleId,
+            yourRole:
+              covenScope.kind === "worker"
+                ? covenScope.roleId
+                : run?.state.userLed
+                  ? "leader (the user's selected model; the lead role is a subagent you can delegate to)"
+                  : leaderRole(definition).id,
             mission: definition.instructions.mission,
             sharedGuidance: definition.instructions.sharedGuidance,
             roles: frontMatter.roles.map((role) => ({
@@ -271,11 +277,11 @@ const makeHandlers = (
         const role = definition.frontMatter.roles.find(
           (candidate) => candidate.id === input.roleId,
         );
-        if (role === undefined || role.kind !== "worker") {
+        const roles = delegatableRoles(definition, run.state);
+        if (role === undefined || !roles.includes(role)) {
           return yield* failure(
             "invalid_request",
-            `The coven has no worker role "${input.roleId}". Roles: ${definition.frontMatter.roles
-              .filter((candidate) => candidate.kind === "worker")
+            `The coven has no role "${input.roleId}" you can delegate to. Roles: ${roles
               .map((candidate) => candidate.id)
               .join(", ")}.`,
           );

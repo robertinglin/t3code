@@ -281,9 +281,15 @@ const make = Effect.gen(function* () {
 
   const setThread: CovenControlService["Service"]["setThread"] = Effect.fn("setThread")(
     function* (threadId, covenId) {
+      const previous = yield* covens.threadScope(threadId);
       yield* endRunForSwitch(threadId, covenId);
       const state = yield* covens.setThread(threadId, covenId);
       if (state.binding === null) return state;
+      // Only picking the coven puts the thread on the lead's model. After that the user's
+      // choice stands: a different model leads and the lead role becomes a subagent.
+      if (previous?.kind === "leader" && previous.binding.covenId === state.binding.covenId) {
+        return state;
+      }
       const definition = yield* covens.definitionAt(state.binding.covenId, state.binding.revision);
       if (definition === null) return state;
       const now = Date.parse(yield* nowIso);
@@ -799,6 +805,11 @@ const make = Effect.gen(function* () {
         (candidate) => candidate.id === input.gateId,
       );
       if (gate === undefined) return yield* notFound(`This coven has no gate ${input.gateId}.`);
+      if (scope.kind === "leader" && run.state.userLed === true) {
+        return yield* policyDenied(
+          `You lead with the user's model, so you don't vote. Delegate the review to the voters (${covenGateElectorate(gate).join(", ")}) with coven_delegate_role.`,
+        );
+      }
       const roleId = scope.kind === "leader" ? leaderRole(definition).id : scope.roleId;
       const evidenceGate = gate.type === "test" || gate.type === "artifact";
       if (!evidenceGate && !covenGateElectorate(gate).includes(roleId)) {
@@ -1304,7 +1315,8 @@ const make = Effect.gen(function* () {
       lastErrorCode: shell.lastErrorCode ?? null,
       usageLimitResetAt: shell.usageLimitResetAt ?? null,
     });
-    if (kind !== "quota") return;
+    // The user's own model ran out; changing it again is the user's call.
+    if (kind !== "quota" || run.state.userLed === true) return;
     const definition = yield* covens.definitionAt(run.covenId, run.revision);
     if (definition === null) return;
     const now = yield* nowIso;

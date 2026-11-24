@@ -35,14 +35,18 @@ export function covenLeaderNote(input: {
   readonly run?: CovenRunRecord | null;
 }): string {
   const frontMatter = input.definition.frontMatter;
+  const run = input.run ?? null;
+  const userLed = run?.state.userLed === true;
   const workers = frontMatter.roles
-    .filter((role) => role.kind === "worker")
+    .filter((role) => role.kind === "worker" || userLed)
     .map((role) => `${role.id} (${role.responsibility})`)
     .join("; ");
-  const run = input.run ?? null;
   const gates = frontMatter.governance.gates.map((gate) => `${gate.id} (${gate.type}, ${gate.on})`);
+  const lead = frontMatter.roles.find((role) => role.kind === "orchestrator");
   const lines = [
-    `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). You are its leader.`,
+    userLed
+      ? `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). The user picked you to lead it in place of its lead role, so ${lead?.id ?? "the lead role"} is one of your subagents: hand it the work it is responsible for (such as reviews) with coven_delegate_role instead of doing that work yourself.`
+      : `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). You are its leader.`,
     workers === ""
       ? "It has no worker roles, so do the work yourself."
       : `Worker roles: ${workers}. Hand work to them with coven_delegate_role; call coven_capabilities for the mission and limits, and coven_task_status for progress. Generic delegation tools and your own built-in subagents are turned off here, so don't start subagents yourself.`,

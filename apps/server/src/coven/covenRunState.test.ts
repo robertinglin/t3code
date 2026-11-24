@@ -9,8 +9,11 @@ import { renderCovenRunDocs } from "./covenRunDocs.ts";
 import { covenLeaderNote } from "./covenWorkerTask.ts";
 import {
   approvePendingPlan,
+  delegatableRoles,
   delegationRefusal,
   isChatPlanApproval,
+  isLeadModel,
+  leaderRole,
   runtimeWarningMinutes,
   initialRunState,
   toRunView,
@@ -119,6 +122,46 @@ describe("coven run state", () => {
       ],
     };
     expect(delegationRefusal(passed, definition, "builder")).toBeNull();
+  });
+
+  it("lets the user's own model lead, with the lead role as a subagent", () => {
+    const state = running(initialRunState({ definition, leaderCandidateIndex: 0 }));
+    expect(isLeadModel(definition, { instanceId: "codex", model: "gpt-5.5" })).toBe(true);
+    expect(isLeadModel(definition, { instanceId: "antigravity", model: "gemini-4-neon" })).toBe(
+      false,
+    );
+    const lead = leaderRole(definition).id;
+    expect(delegatableRoles(definition, state).map((role) => role.id)).not.toContain(lead);
+    const userLed = { ...state, userLed: true };
+    expect(delegatableRoles(definition, userLed).map((role) => role.id)).toContain(lead);
+    const note = covenLeaderNote({
+      binding: { name: "Review first", revision: 1 },
+      definition,
+      run: {
+        id: "run",
+        leaderThreadId: "thread" as never,
+        covenId: "review-first",
+        revision: 1,
+        startedAt: "2026-11-19T00:00:00.000Z",
+        endedAt: null,
+        state: userLed,
+      },
+    });
+    expect(note).toContain(`${lead} is one of your subagents`);
+    expect(
+      toRunView(
+        {
+          id: "run",
+          leaderThreadId: "t" as never,
+          covenId: "c",
+          revision: 1,
+          startedAt: "2026-11-19T00:00:00.000Z",
+          endedAt: null,
+          state: userLed,
+        },
+        [],
+      ).userLed,
+    ).toBe(true);
   });
 
   it("tells the leader where each gate stands so late results aren't handled twice", () => {
