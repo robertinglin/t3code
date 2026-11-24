@@ -9,6 +9,9 @@ import type {
   CovenTask,
   CovenVoteDecision,
 } from "@t3tools/contracts";
+import { msg } from "gt-react";
+
+import { m } from "../../i18n/messages";
 
 /** One persona in the coven: a role from the definition, or from the summary while it loads. */
 export interface CovenMember {
@@ -24,7 +27,7 @@ export interface CovenMember {
 }
 
 /** Stands in for the model the user picked to orchestrate in place of the lead role. */
-export const PICKED_LEADER_ROLE_ID = "picked-leader";
+const PICKED_LEADER_ROLE_ID = "picked-leader";
 
 /**
  * The leader first, then workers in definition order. When the user picked a model of their own
@@ -141,28 +144,36 @@ export function isRunFinished(run: CovenRunView | null): boolean {
 
 /** The run's state in plain words, for the panel's header. */
 export function runHeadline(run: CovenRunView | null): string {
-  if (run === null) return "Ready. The lead starts when you send a message.";
+  if (run === null) return m(msg("Ready. The lead starts when you send a message."));
   const waitingOn = (kind: "plan" | "gate") =>
     run.pendingApprovals.some((approval) => approval.kind === kind);
   switch (run.status) {
     case "awaiting_plan":
-      return waitingOn("plan") ? "Waiting for your plan approval" : "The lead is drafting a plan";
+      return waitingOn("plan")
+        ? m(msg("Waiting for your plan approval"))
+        : m(msg("The lead is drafting a plan"));
     case "awaiting_gate":
-      return waitingOn("gate") ? "Waiting for your decision" : "Judges are voting";
+      return waitingOn("gate") ? m(msg("Waiting for your decision")) : m(msg("Judges are voting"));
     case "running":
-      return "Working";
+      return m(msg("Working"));
     case "switching_provider":
-      return "Switching models";
+      return m(msg("Switching models"));
     case "paused":
-      return run.statusReason ? `Paused: ${run.statusReason}` : "Paused";
+      return run.statusReason
+        ? m(msg("Paused: {reason}", { reason: run.statusReason }))
+        : m(msg("Paused"));
     case "recovery_required":
-      return run.statusReason ? `Needs recovery: ${run.statusReason}` : "Needs recovery";
+      return run.statusReason
+        ? m(msg("Needs recovery: {reason}", { reason: run.statusReason }))
+        : m(msg("Needs recovery"));
     case "completed":
-      return "Finished";
+      return m(msg("Finished"));
     case "failed":
-      return run.statusReason ? `Failed: ${run.statusReason}` : "Failed";
+      return run.statusReason
+        ? m(msg("Failed: {reason}", { reason: run.statusReason }))
+        : m(msg("Failed"));
     case "cancelled":
-      return "Stopped";
+      return m(msg("Stopped"));
   }
 }
 
