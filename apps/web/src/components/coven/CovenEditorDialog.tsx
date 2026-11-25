@@ -13,9 +13,11 @@ import {
   type CovenConflictChoice,
   type CovenMergeResult,
 } from "@t3tools/shared/covenMerge";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 
+import { m, type MessageResolver } from "~/i18n/messages";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -90,6 +92,7 @@ function isEditorTab(value: unknown): value is EditorTab {
 }
 
 function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }) {
+  const gt = useGT();
   const [source, setSource] = useState(request.source);
   // Text the current edits started from; the common ancestor for a three-way merge.
   const [baseSource, setBaseSource] = useState(request.source);
@@ -147,8 +150,8 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
             type: "success",
             title:
               incoming.from === "builder"
-                ? "Merged the builder's changes with yours"
-                : "Merged the saved changes with yours",
+                ? m(msg("Merged the builder's changes with yours"))
+                : m(msg("Merged the saved changes with yours")),
           }),
         );
       }
@@ -169,7 +172,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
       input: { covenId: request.covenId },
     });
     if (latest._tag === "Failure") {
-      reportCovenFailure("Could not load the latest revision", latest);
+      reportCovenFailure(m(msg("Could not load the latest revision")), latest);
       return;
     }
     startMerge({
@@ -187,7 +190,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
       input: { covenId: request.covenId },
     });
     if (result._tag === "Failure") {
-      reportCovenFailure("Could not load the coven history", result);
+      reportCovenFailure(m(msg("Could not load the coven history")), result);
       return;
     }
     setHistory([...result.value.revisions].toSorted((a, b) => b.revision - a.revision));
@@ -200,7 +203,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
       input: { covenId: request.covenId, revision },
     });
     if (result._tag === "Failure") {
-      reportCovenFailure("Could not load that revision", result);
+      reportCovenFailure(m(msg("Could not load that revision")), result);
       return;
     }
     setSource(result.value.source);
@@ -218,7 +221,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
     if (result._tag === "Failure") {
       if (isCovenConflict(result)) {
         setConflict(true);
-        setSaveError("The builder changed the draft while you were editing.");
+        setSaveError(m(msg("The builder changed the draft while you were editing.")));
         mergeLatestDraft();
       } else {
         setSaveError(covenFailureMessage(result));
@@ -228,7 +231,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
     toastManager.add(
       stackedThreadToast({
         type: "success",
-        title: `Draft updated · version ${result.value.version}`,
+        title: m(msg("Draft updated · version {version}", { version: result.value.version })),
       }),
     );
     closeCovenEditor();
@@ -250,7 +253,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
       setSaving(false);
       if (isCovenConflict(result) && request.covenId !== undefined) {
         setConflict(true);
-        setSaveError("Someone saved a newer revision while you were editing.");
+        setSaveError(m(msg("Someone saved a newer revision while you were editing.")));
         await mergeLatestSaved();
       } else {
         setSaveError(covenFailureMessage(result));
@@ -260,7 +263,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
     const saved = result.value.summary;
     if (request.bindThreadId !== undefined) {
       reportCovenFailure(
-        "Saved, but could not use the coven here",
+        m(msg("Saved, but could not use the coven here")),
         await setThreadCoven({
           environmentId: request.environmentId,
           input: { threadId: request.bindThreadId, covenId: saved.id },
@@ -270,13 +273,15 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
     toastManager.add(
       stackedThreadToast({
         type: "success",
-        title: `Saved ${saved.name} · revision ${saved.revision}`,
+        title: m(
+          msg("Saved {name} · revision {revision}", { name: saved.name, revision: saved.revision }),
+        ),
       }),
     );
     closeCovenEditor();
   };
 
-  const title = isDraft ? "Edit coven draft" : isNew ? "New coven" : "Edit coven";
+  const title = isDraft ? gt("Edit coven draft") : isNew ? gt("New coven") : gt("Edit coven");
 
   return (
     <Dialog
@@ -290,14 +295,18 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {isDraft
-              ? "Your edits and the builder's go to the same draft. Saving the coven itself happens from the sidebar."
-              : "Roles, ordered model chains and limits live in the front matter; mission and role instructions live in the Markdown below it. Saving creates a new revision."}
+              ? gt(
+                  "Your edits and the builder's go to the same draft. Saving the coven itself happens from the sidebar.",
+                )
+              : gt(
+                  "Roles, ordered model chains and limits live in the front matter; mission and role instructions live in the Markdown below it. Saving creates a new revision.",
+                )}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           <div className="flex flex-col gap-3">
             <ToggleGroup
-              aria-label="Coven editor view"
+              aria-label={gt("Coven editor view")}
               value={[tab]}
               onValueChange={(next) => {
                 const value = next[0];
@@ -305,19 +314,35 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
                 else if (isEditorTab(value)) setTab(value);
               }}
             >
-              <Toggle value="roles">Roles</Toggle>
-              <Toggle value="governance">Governance</Toggle>
-              <Toggle value="markdown">Markdown</Toggle>
-              {request.covenId === undefined ? null : <Toggle value="history">History</Toggle>}
+              <Toggle value="roles">
+                <T>Roles</T>
+              </Toggle>
+              <Toggle value="governance">
+                <T>Governance</T>
+              </Toggle>
+              <Toggle value="markdown">
+                <T>Markdown</T>
+              </Toggle>
+              {request.covenId === undefined ? null : (
+                <Toggle value="history">
+                  <T>History</T>
+                </Toggle>
+              )}
             </ToggleGroup>
             {draftMovedOn && !conflict && merge === null ? (
               <p className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
                 <span>
-                  The builder updated the draft to version {liveDraft?.version}
-                  {liveDraft?.lastChangeSummary ? `: ${liveDraft.lastChangeSummary}` : "."}
+                  {liveDraft?.lastChangeSummary
+                    ? gt("The builder updated the draft to version {version}: {summary}", {
+                        version: liveDraft.version,
+                        summary: liveDraft.lastChangeSummary,
+                      })
+                    : gt("The builder updated the draft to version {version}.", {
+                        version: liveDraft?.version ?? "",
+                      })}
                 </span>
                 <Button size="xs" variant="outline" onClick={mergeLatestDraft}>
-                  {source === baseSource ? "Load latest" : "Merge with my edits"}
+                  {source === baseSource ? gt("Load latest") : gt("Merge with my edits")}
                 </Button>
               </p>
             ) : null}
@@ -326,7 +351,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
                 result={merge.result}
                 choices={merge.choices}
                 theirsLabel={
-                  merge.incoming.from === "builder" ? "Builder's version" : "Saved version"
+                  merge.incoming.from === "builder" ? gt("Builder's version") : gt("Saved version")
                 }
                 onChoose={(index, choice) =>
                   setMerge({
@@ -345,11 +370,14 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
               <>
                 {restoredFrom === null ? null : (
                   <p className="text-muted-foreground text-xs">
-                    Restored from revision {restoredFrom}. Saving makes it the newest revision.
+                    <T>
+                      Restored from revision <Var>{restoredFrom}</Var>. Saving makes it the newest
+                      revision.
+                    </T>
                   </p>
                 )}
                 <Textarea
-                  aria-label="Coven definition"
+                  aria-label={gt("Coven definition")}
                   className="min-h-96"
                   spellCheck={false}
                   value={source}
@@ -373,7 +401,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
               )
             ) : (
               <p className="text-muted-foreground text-xs">
-                Fix the problems below in the Markdown tab to see this view.
+                <T>Fix the problems below in the Markdown tab to see this view.</T>
               </p>
             )}
             {parsed.ok ? null : (
@@ -398,7 +426,7 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
                     variant="outline"
                     onClick={() => (isDraft ? mergeLatestDraft() : void mergeLatestSaved())}
                   >
-                    Merge with my edits
+                    <T>Merge with my edits</T>
                   </Button>
                 ) : null}
               </p>
@@ -407,14 +435,14 @@ function CovenEditorDialog({ request }: { readonly request: CovenEditorRequest }
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={closeCovenEditor}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button
             type="button"
             disabled={!parsed.ok || saving || conflict || merge !== null}
             onClick={() => void save()}
           >
-            {saving ? "Saving…" : isDraft ? "Update draft" : "Save revision"}
+            {saving ? gt("Saving…") : isDraft ? gt("Update draft") : gt("Save revision")}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -429,6 +457,7 @@ function CovenRolesView({
   readonly definition: CovenDefinition;
   readonly environmentId: EnvironmentId;
 }) {
+  const gt = useGT();
   const { frontMatter, instructions } = definition;
   const providers = useCovenProviders(environmentId);
   return (
@@ -444,8 +473,9 @@ function CovenRolesView({
           <li key={role.id} className="rounded-md border px-3 py-2">
             <div className="flex items-baseline justify-between gap-2">
               <span className="font-medium">
-                {role.name}
-                {role.kind === "orchestrator" ? " · leader" : ""}
+                {role.kind === "orchestrator"
+                  ? gt("{name} · leader", { name: role.name })
+                  : role.name}
               </span>
               <span className="font-mono text-muted-foreground text-xs">{role.id}</span>
             </div>
@@ -454,11 +484,18 @@ function CovenRolesView({
             ) : null}
             {role.rotation ? (
               <p className="text-xs">
-                Takes turns in rotation <span className="font-mono">{role.rotation}</span>: each
-                task goes to the next model.
+                <T>
+                  Takes turns in rotation{" "}
+                  <span className="font-mono">
+                    <Var>{role.rotation}</Var>
+                  </span>
+                  : each task goes to the next model.
+                </T>
               </p>
             ) : role.pick === "most-headroom" ? (
-              <p className="text-xs">Uses the model with the most usage limit left.</p>
+              <p className="text-xs">
+                <T>Uses the model with the most usage limit left.</T>
+              </p>
             ) : null}
             <ol className="mt-1 flex flex-col gap-0.5 text-xs">
               {role.candidates.map((candidate, index) => {
@@ -467,19 +504,21 @@ function CovenRolesView({
                   <li key={`${candidate.providerInstanceId}:${candidate.modelId}`}>
                     <span className="text-muted-foreground">
                       {role.rotation
-                        ? `Turn ${index + 1}`
+                        ? gt("Turn {number}", { number: index + 1 })
                         : role.pick === "most-headroom"
-                          ? "Option"
+                          ? gt("Option", { $context: "a model the role may pick from" })
                           : index === 0
-                            ? "Primary"
-                            : `Fallback ${index}`}
+                            ? gt("Primary", { $context: "the first model in a fallback chain" })
+                            : gt("Fallback {number}", { number: index })}
                       :{" "}
                     </span>
-                    {described.modelLabel}
-                    <span className="text-muted-foreground">
-                      {" "}
-                      on {candidate.providerInstanceId}
-                    </span>
+                    <T>
+                      <Var>{described.modelLabel}</Var>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        on <Var>{candidate.providerInstanceId}</Var>
+                      </span>
+                    </T>
                     {described.options.map((option) => (
                       <span key={option.id} className="text-muted-foreground">
                         {" · "}
@@ -488,7 +527,7 @@ function CovenRolesView({
                     ))}
                     {described.modelKnown ? null : (
                       <p className="text-destructive-foreground">
-                        This provider doesn't offer that model.
+                        <T>This provider doesn't offer that model.</T>
                       </p>
                     )}
                     {described.options
@@ -514,53 +553,86 @@ function CovenRolesView({
   );
 }
 
-function describeGate(gate: CovenGate): string {
+function describeGate(gate: CovenGate, resolve: MessageResolver = m): string {
   switch (gate.type) {
     case "consensus": {
       const rule =
-        gate.decision.kind === "k-of-n" ? `${gate.decision.k ?? "?"} of n` : gate.decision.kind;
-      const veto = gate.vetoRoleIds?.length ? `, veto: ${gate.vetoRoleIds.join(", ")}` : "";
-      return `Consensus (${rule}) among ${gate.voterRoleIds.join(", ")}${veto}`;
+        gate.decision.kind === "k-of-n"
+          ? resolve(msg("{k} of n", { k: gate.decision.k ?? "?" }))
+          : gate.decision.kind;
+      const voters = gate.voterRoleIds.join(", ");
+      return gate.vetoRoleIds?.length
+        ? resolve(
+            msg("Consensus ({rule}) among {voters}, veto: {vetoes}", {
+              rule,
+              voters,
+              vetoes: gate.vetoRoleIds.join(", "),
+            }),
+          )
+        : resolve(msg("Consensus ({rule}) among {voters}", { rule, voters }));
     }
-    case "review":
-      return `Review by ${gate.reviewerRoleIds.join(", ")}${gate.minimumApprovals ? `, ${gate.minimumApprovals} approval(s)` : ""}`;
+    case "review": {
+      const reviewers = gate.reviewerRoleIds.join(", ");
+      return gate.minimumApprovals
+        ? resolve(
+            msg("Review by {reviewers}, {count} approval(s)", {
+              reviewers,
+              count: gate.minimumApprovals,
+            }),
+          )
+        : resolve(msg("Review by {reviewers}", { reviewers }));
+    }
     case "test":
-      return gate.evidence ? `Tests: ${gate.evidence}` : "Tests must pass";
+      return gate.evidence
+        ? resolve(msg("Tests: {evidence}", { evidence: gate.evidence }))
+        : resolve(msg("Tests must pass"));
     case "human-approval":
-      return gate.question ? `You approve: ${gate.question}` : "You approve";
+      return gate.question
+        ? resolve(msg("You approve: {question}", { question: gate.question }))
+        : resolve(msg("You approve"));
     case "artifact":
-      return `Artifact: ${gate.artifact}`;
+      return resolve(msg("Artifact: {artifact}", { artifact: gate.artifact }));
   }
 }
 
 function CovenGovernanceView({ definition }: { readonly definition: CovenDefinition }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { governance, autonomy, limits, workspace } = definition.frontMatter;
   const rows: ReadonlyArray<readonly [string, string]> = [
     [
-      "Plan approval",
-      autonomy.initialPlanApproval ? "Required before work starts" : "Leader starts",
+      gt("Plan approval"),
+      autonomy.initialPlanApproval ? gt("Required before work starts") : gt("Leader starts"),
     ],
     [
-      "Scope changes",
-      autonomy.scopeChanges === "approval-required" ? "Need approval" : "Leader decides",
+      gt("Scope changes"),
+      autonomy.scopeChanges === "approval-required" ? gt("Need approval") : gt("Leader decides"),
     ],
-    ["External side effects", "Need approval"],
-    ["Permissions", "Never above T3's own settings"],
-    ["Workspace", `${workspace.parallelWriters}, shared writes by ${workspace.sharedWrites}`],
-    ["Active workers", String(limits.maxActiveWorkers)],
-    ["Delegations per run", String(limits.maxDelegationsPerRun)],
-    ["Review and fix rounds", String(limits.maxReviewFixRounds)],
-    ["Agent run limit", `${limits.maxRuntimeMinutes} min each`],
-    ["Retries per task", String(limits.maxTransientRetriesPerTask)],
-    ["Leader handoffs", String(limits.maxLeadershipTransitionsPerRun)],
+    [gt("External side effects"), gt("Need approval")],
+    [gt("Permissions"), gt("Never above T3's own settings")],
+    [
+      gt("Workspace"),
+      gt("{parallelWriters}, shared writes by {sharedWrites}", {
+        parallelWriters: workspace.parallelWriters,
+        sharedWrites: workspace.sharedWrites,
+      }),
+    ],
+    [gt("Active workers"), String(limits.maxActiveWorkers)],
+    [gt("Delegations per run"), String(limits.maxDelegationsPerRun)],
+    [gt("Review and fix rounds"), String(limits.maxReviewFixRounds)],
+    [gt("Agent run limit"), gt("{minutes} min each", { minutes: limits.maxRuntimeMinutes })],
+    [gt("Retries per task"), String(limits.maxTransientRetriesPerTask)],
+    [gt("Leader handoffs"), String(limits.maxLeadershipTransitionsPerRun)],
   ];
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div>
-        <p className="mb-1 font-medium text-xs">Gates</p>
+        <p className="mb-1 font-medium text-xs">
+          <T>Gates</T>
+        </p>
         {governance.gates.length === 0 ? (
           <p className="text-muted-foreground text-xs">
-            No gates. The leader decides when work is done.
+            <T>No gates. The leader decides when work is done.</T>
           </p>
         ) : (
           <ul className="flex flex-col gap-1 text-xs">
@@ -568,7 +640,7 @@ function CovenGovernanceView({ definition }: { readonly definition: CovenDefinit
               <li key={gate.id}>
                 <span className="font-mono">{gate.id}</span>
                 <span className="text-muted-foreground"> · {gate.on}: </span>
-                {describeGate(gate)}
+                {describeGate(gate, messages)}
               </li>
             ))}
           </ul>
@@ -582,7 +654,9 @@ function CovenGovernanceView({ definition }: { readonly definition: CovenDefinit
           </div>
         ))}
       </dl>
-      <p className="text-muted-foreground text-xs">Edit these in the Markdown tab.</p>
+      <p className="text-muted-foreground text-xs">
+        <T>Edit these in the Markdown tab.</T>
+      </p>
     </div>
   );
 }
@@ -596,14 +670,22 @@ function CovenHistory({
   readonly current: number | undefined;
   readonly onRestore: (revision: number) => void;
 }) {
-  if (revisions === null) return <p className="text-muted-foreground text-xs">Loading…</p>;
+  const gt = useGT();
+  if (revisions === null) {
+    return (
+      <p className="text-muted-foreground text-xs">
+        <T>Loading…</T>
+      </p>
+    );
+  }
   return (
     <ul className="flex flex-col gap-1 text-sm">
       {revisions.map((entry) => (
         <li key={entry.revision} className="flex items-center justify-between gap-2">
           <span>
-            Revision {entry.revision}
-            {entry.revision === current ? " · current" : ""}
+            {entry.revision === current
+              ? gt("Revision {revision} · current", { revision: entry.revision })
+              : gt("Revision {revision}", { revision: entry.revision })}
             <span className="text-muted-foreground text-xs">
               {" "}
               · {new Date(entry.createdAt).toLocaleString()}
@@ -611,7 +693,7 @@ function CovenHistory({
           </span>
           {entry.revision === current ? null : (
             <Button size="xs" variant="outline" onClick={() => onRestore(entry.revision)}>
-              Restore
+              <T>Restore</T>
             </Button>
           )}
         </li>

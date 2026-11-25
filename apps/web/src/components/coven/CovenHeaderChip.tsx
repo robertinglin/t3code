@@ -1,4 +1,5 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 import { UsersRoundIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
@@ -26,6 +27,7 @@ export function useThreadCovenName(threadRef: ScopedThreadRef | null): string | 
 
 /** Opens the coven panel. Shown only while the thread has a coven. */
 export function CovenHeaderChip({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
+  const gt = useGT();
   const state = useThreadCovenState(threadRef);
   const binding = state?.binding ?? null;
   if (binding === null) return null;
@@ -36,7 +38,11 @@ export function CovenHeaderChip({ threadRef }: { readonly threadRef: ScopedThrea
     <Button
       size="xs"
       variant="outline"
-      aria-label={needsYou ? `${binding.name} needs your approval` : `Open ${binding.name}`}
+      aria-label={
+        needsYou
+          ? gt("{name} needs your approval", { name: binding.name })
+          : gt("Open {name}", { name: binding.name })
+      }
       onClick={() => useRightPanelStore.getState().open(threadRef, "coven")}
     >
       <span className="relative inline-flex">

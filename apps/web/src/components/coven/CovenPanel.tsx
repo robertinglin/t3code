@@ -17,8 +17,10 @@ import {
   SquareIcon,
   UsersRoundIcon,
 } from "lucide-react";
+import { msg, T, useGT } from "gt-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
+import { m } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useThreadShell } from "../../state/entities";
@@ -54,6 +56,7 @@ const RECENT_EVENT_COUNT = 3;
 
 /** The coven bound to a thread, as a cast of members you can open up one by one. */
 export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
+  const gt = useGT();
   const { environmentId, threadId } = threadRef;
   const covens =
     useEnvironmentQuery(serverEnvironment.covensLive({ environmentId, input: {} })).data?.covens ??
@@ -98,12 +101,12 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
       setFocusedRoleId(null);
       if (value === NO_COVEN) {
         reportCovenFailure(
-          "Could not turn the coven off",
+          m(msg("Could not turn the coven off")),
           await clearThreadCoven({ environmentId, input: { threadId } }),
         );
       } else {
         reportCovenFailure(
-          "Could not change the coven",
+          m(msg("Could not change the coven")),
           await setThreadCoven({ environmentId, input: { threadId, covenId: value } }),
         );
       }
@@ -114,7 +117,7 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
       if (binding === null) return;
       const result = await loadCoven({ environmentId, input: { covenId: binding.covenId } });
       if (result._tag === "Failure") {
-        reportCovenFailure("Could not load the coven", result);
+        reportCovenFailure(m(msg("Could not load the coven")), result);
         return;
       }
       openCovenEditor({
@@ -149,16 +152,22 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
             <UsersRoundIcon className="size-6 text-muted-foreground" />
           </span>
           <div className="flex flex-col gap-1">
-            <h2 className="font-semibold text-base">No coven on this thread</h2>
+            <h2 className="font-semibold text-base">
+              <T>No coven on this thread</T>
+            </h2>
             <p className="text-muted-foreground text-sm">
-              A coven is a team of agents. This thread's model leads, and the others take on work,
-              judge it, and step in when a model runs out of quota.
+              <T>
+                A coven is a team of agents. This thread's model leads, and the others take on work,
+                judge it, and step in when a model runs out of quota.
+              </T>
             </p>
           </div>
         </div>
         {covens.length > 0 ? (
           <div className="flex flex-col gap-1.5">
-            <span className="px-2 text-muted-foreground text-xs">Bring in a saved coven</span>
+            <span className="px-2 text-muted-foreground text-xs">
+              <T>Bring in a saved coven</T>
+            </span>
             <CovenPicker
               covens={covens}
               value={null}
@@ -171,7 +180,7 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
           <div className="flex justify-center">
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void buildWithAi()}>
               <BotIcon />
-              Build one with AI
+              <T>Build one with AI</T>
             </Button>
           </div>
         )}
@@ -203,25 +212,33 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
       menu={
         <Menu>
           <MenuTrigger
-            render={<Button size="icon-xs" variant="ghost" aria-label="Coven options" />}
+            render={<Button size="icon-xs" variant="ghost" aria-label={gt("Coven options")} />}
           >
             <EllipsisIcon />
           </MenuTrigger>
           <MenuPopup align="end">
-            <MenuItem onClick={() => setSwitching((value) => !value)}>Switch coven</MenuItem>
-            <MenuItem onClick={() => void edit()}>Edit this coven</MenuItem>
+            <MenuItem onClick={() => setSwitching((value) => !value)}>
+              <T>Switch coven</T>
+            </MenuItem>
+            <MenuItem onClick={() => void edit()}>
+              <T>Edit this coven</T>
+            </MenuItem>
             {thread === null ? null : (
-              <MenuItem onClick={() => void buildWithAi()}>Build a new one with AI</MenuItem>
+              <MenuItem onClick={() => void buildWithAi()}>
+                <T>Build a new one with AI</T>
+              </MenuItem>
             )}
             {notesPath ? (
               <MenuItem
                 onClick={() => useRightPanelStore.getState().openFile(threadRef, notesPath)}
               >
-                Open run notes
+                <T>Open run notes</T>
               </MenuItem>
             ) : null}
             <MenuSeparator />
-            <MenuItem onClick={() => void choose(NO_COVEN)}>Remove from thread</MenuItem>
+            <MenuItem onClick={() => void choose(NO_COVEN)}>
+              <T>Remove from thread</T>
+            </MenuItem>
             <MenuItem
               variant="destructive"
               onClick={() =>
@@ -230,7 +247,7 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
                 )
               }
             >
-              Delete coven
+              <T>Delete coven</T>
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -304,7 +321,7 @@ export function CovenPanel({ threadRef }: { readonly threadRef: ScopedThreadRef 
       {run?.summary && isRunFinished(run) ? (
         <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">{run.summary}</div>
       ) : null}
-      <section className="flex flex-col gap-2" aria-label="Coven members">
+      <section className="flex flex-col gap-2" aria-label={gt("Coven members")}>
         <ul className="flex flex-col gap-2">
           {members.map((member) => {
             const facts = describe(member);
@@ -389,7 +406,7 @@ function CovenHeader(props: {
                 onClick={() => props.onControl("resume")}
               >
                 <PlayIcon />
-                Resume
+                <T>Resume</T>
               </Button>
             ) : (
               <Button
@@ -399,7 +416,7 @@ function CovenHeader(props: {
                 onClick={() => props.onControl("pause")}
               >
                 <PauseIcon />
-                Pause
+                <T>Pause</T>
               </Button>
             )}
             <Button
@@ -409,7 +426,7 @@ function CovenHeader(props: {
               onClick={() => props.onControl("stop")}
             >
               <SquareIcon />
-              Stop
+              <T>Stop</T>
             </Button>
           </span>
         ) : null}
@@ -424,6 +441,7 @@ function ApprovalCard(props: {
   readonly body: string;
   readonly onDecide: (approve: boolean, note: string) => Promise<boolean>;
 }) {
+  const gt = useGT();
   const [note, setNote] = useState("");
   const [noting, setNoting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -435,10 +453,10 @@ function ApprovalCard(props: {
   return (
     <section
       className="flex flex-col gap-2 rounded-xl border border-warning/40 bg-warning/5 px-3 py-3"
-      aria-label="Waiting for you"
+      aria-label={gt("Waiting for you")}
     >
       <span className="font-medium text-warning-foreground text-xs">
-        {props.kind === "plan" ? "The lead wants your go-ahead on a plan" : "Your call"}
+        {props.kind === "plan" ? gt("The lead wants your go-ahead on a plan") : gt("Your call")}
       </span>
       <h3 className="font-semibold text-sm">{props.title}</h3>
       {props.body ? (
@@ -450,20 +468,20 @@ function ApprovalCard(props: {
         <Textarea
           value={note}
           rows={2}
-          placeholder="Add a note for the lead (optional)"
+          placeholder={gt("Add a note for the lead (optional)")}
           onChange={(event) => setNote(event.target.value)}
         />
       ) : null}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="xs" disabled={busy} onClick={() => decide(true)}>
-          Approve
+          <T>Approve</T>
         </Button>
         <Button size="xs" variant="outline" disabled={busy} onClick={() => decide(false)}>
-          Reject
+          <T>Reject</T>
         </Button>
         {noting ? null : (
           <Button size="xs" variant="ghost" onClick={() => setNoting(true)}>
-            Add a note
+            <T>Add a note</T>
           </Button>
         )}
       </div>
@@ -486,6 +504,7 @@ function JudgesPanel(props: {
   readonly nameOf: (roleId: string) => string;
   readonly onOpenMember: (roleId: string) => void;
 }) {
+  const gt = useGT();
   const ballots = gateBallots(props.round, props.electorate);
   if (ballots.length === 0) return null;
   const memberFor = (roleId: string) =>
@@ -495,7 +514,7 @@ function JudgesPanel(props: {
       kind: "worker" as const,
     };
   return (
-    <section className="flex flex-col gap-2 rounded-xl border px-3 py-3" aria-label="Judges">
+    <section className="flex flex-col gap-2 rounded-xl border px-3 py-3" aria-label={gt("Judges")}>
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="truncate font-medium text-sm">{gateTitle(props.round)}</h3>
         <span className="shrink-0 text-muted-foreground text-xs">
@@ -513,7 +532,7 @@ function JudgesPanel(props: {
                 <button
                   type="button"
                   className="cursor-pointer rounded-full focus-visible:outline-2 focus-visible:outline-ring"
-                  aria-label={`Open ${props.nameOf(ballot.roleId)}`}
+                  aria-label={gt("Open {name}", { name: props.nameOf(ballot.roleId) })}
                   onClick={() => props.onOpenMember(ballot.roleId)}
                 >
                   <CovenAvatar
@@ -553,7 +572,7 @@ function Happenings(props: { readonly run: CovenRunView }) {
   return (
     <Collapsible defaultOpen>
       <CollapsibleTrigger className="flex cursor-pointer items-center gap-1 font-medium text-muted-foreground text-xs hover:text-foreground">
-        Just now
+        <T>Just now</T>
         <ChevronDownIcon className="size-3" />
       </CollapsibleTrigger>
       <CollapsiblePanel>

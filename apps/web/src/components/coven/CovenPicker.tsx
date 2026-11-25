@@ -1,4 +1,5 @@
 import type { CovenSummary } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +32,7 @@ export function CovenPicker(props: {
   readonly disabled: boolean;
   readonly onChoose: (value: string) => void;
 }) {
+  const gt = useGT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const matches = props.covens.filter((coven) => covenMatchesQuery(coven, query));
@@ -61,21 +63,23 @@ export function CovenPicker(props: {
       <div className="px-2">
         <ComboboxTrigger
           disabled={props.disabled}
-          aria-label="Coven for this thread"
+          aria-label={gt("Coven for this thread")}
           render={<Button variant="outline" size="sm" />}
           className="w-full justify-between"
         >
-          <span className="truncate">{current?.name ?? "No coven"}</span>
+          <span className="truncate">{current?.name ?? gt("No coven")}</span>
           <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
         </ComboboxTrigger>
       </div>
       <ComboboxPopup className="flex w-72 flex-col">
         <ComboboxSearchInput
-          placeholder="Search covens..."
+          placeholder={gt("Search covens...")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <ComboboxEmpty>No coven matches.</ComboboxEmpty>
+        <ComboboxEmpty>
+          <T>No coven matches.</T>
+        </ComboboxEmpty>
         <ComboboxList>
           {items.map((value, index) => {
             const coven = props.covens.find((entry) => entry.id === value);
@@ -84,7 +88,7 @@ export function CovenPicker(props: {
               <ComboboxItem key={value} value={value} index={index} hideIndicator>
                 <div className="flex w-full min-w-0 items-center gap-2">
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate">{coven?.name ?? "No coven"}</span>
+                    <span className="truncate">{coven?.name ?? gt("No coven")}</span>
                     {coven?.description ? (
                       <span className="truncate text-muted-foreground text-xs">
                         {coven.description}

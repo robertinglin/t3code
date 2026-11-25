@@ -11,9 +11,11 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { ArrowLeftIcon, CrownIcon, ExternalLinkIcon, SendIcon } from "lucide-react";
 import { type CSSProperties, useState } from "react";
 
+import { m } from "~/i18n/messages";
 import { cn, newMessageId } from "~/lib/utils";
 import { readThreadShell, useThreadShell } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
@@ -103,6 +105,7 @@ function ModelLine(props: {
   readonly primaryCooldown: CovenCooldown | null;
   readonly label: ModelLabeler;
 }) {
+  const gt = useGT();
   const { model, primaryCooldown, label } = props;
   if (model === null) return null;
   const current = label(model.providerInstanceId, model.modelId);
@@ -110,18 +113,25 @@ function ModelLine(props: {
     const from = label(model.failover.fromProviderInstanceId, model.failover.fromModelId);
     return (
       <span className="text-warning-foreground">
-        On {current}.{" "}
         {model.failover.until
-          ? `${from} is cooling down until ${formatClock(model.failover.until)}.`
-          : `Switched from ${from}.`}
+          ? gt("On {current}. {from} is cooling down until {time}.", {
+              current,
+              from,
+              time: formatClock(model.failover.until),
+            })
+          : gt("On {current}. Switched from {from}.", { current, from })}
       </span>
     );
   }
   if (primaryCooldown !== null) {
     return (
       <span className="text-warning-foreground">
-        {current} is cooling down
-        {primaryCooldown.resetAt ? ` until ${formatClock(primaryCooldown.resetAt)}` : ""}
+        {primaryCooldown.resetAt
+          ? gt("{current} is cooling down until {time}", {
+              current,
+              time: formatClock(primaryCooldown.resetAt),
+            })
+          : gt("{current} is cooling down", { current })}
       </span>
     );
   }
@@ -191,13 +201,13 @@ const TASK_STATUS: Record<
   CovenTask["status"],
   { label: string; variant: "success" | "warning" | "error" | "info" | "outline" }
 > = {
-  queued: { label: "Up next", variant: "outline" },
-  running: { label: "Working", variant: "info" },
-  blocked: { label: "Blocked", variant: "warning" },
-  completed: { label: "Done", variant: "success" },
-  failed: { label: "Failed", variant: "error" },
-  cancelled: { label: "Cancelled", variant: "outline" },
-  uncertain: { label: "Unclear", variant: "warning" },
+  queued: { label: msg("Up next", { $context: "task status" }), variant: "outline" },
+  running: { label: msg("Working", { $context: "task status" }), variant: "info" },
+  blocked: { label: msg("Blocked", { $context: "task status" }), variant: "warning" },
+  completed: { label: msg("Done", { $context: "task status" }), variant: "success" },
+  failed: { label: msg("Failed", { $context: "task status" }), variant: "error" },
+  cancelled: { label: msg("Cancelled", { $context: "task status" }), variant: "outline" },
+  uncertain: { label: msg("Unclear", { $context: "task status" }), variant: "warning" },
 };
 
 const ATTEMPT_STATUS: Record<CovenTask["attempts"][number]["status"], string> = {
@@ -222,6 +232,7 @@ export function MemberDetail(props: {
   readonly onOpenThread: (threadId: ThreadId) => void;
   readonly onClearCooldown: (cooldown: CovenCooldown) => void;
 }) {
+  const gt = useGT();
   const { member, run, threadRef } = props;
   const tasks = memberTasks(run, member.roleId);
   const votes = memberVotes(run, member.roleId);
@@ -236,7 +247,7 @@ export function MemberDetail(props: {
       <div>
         <Button size="xs" variant="ghost" onClick={props.onBack}>
           <ArrowLeftIcon />
-          The coven
+          <T>The coven</T>
         </Button>
       </div>
       <div className="flex items-start gap-3">
@@ -244,7 +255,7 @@ export function MemberDetail(props: {
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="font-semibold text-base leading-tight">{member.name}</h3>
           <p className="text-muted-foreground text-xs">
-            {isLead ? "Leads the coven from this thread" : "Works in its own thread"}
+            {isLead ? gt("Leads the coven from this thread") : gt("Works in its own thread")}
           </p>
           <p className="flex items-center gap-1.5 text-xs">
             <span
@@ -257,7 +268,9 @@ export function MemberDetail(props: {
       {member.responsibility ? <p className="text-sm">{member.responsibility}</p> : null}
 
       <section className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-        <span className="text-muted-foreground">Model</span>
+        <span className="text-muted-foreground">
+          <T>Model</T>
+        </span>
         <ModelLine
           model={props.model}
           primaryCooldown={props.primaryCooldown}
@@ -265,11 +278,12 @@ export function MemberDetail(props: {
         />
         {member.candidates.length > 1 ? (
           <span className="text-muted-foreground">
-            Falls back to{" "}
-            {member.candidates
-              .slice(1)
-              .map((candidate) => props.label(candidate.providerInstanceId, candidate.modelId))
-              .join(", then ")}
+            {gt("Falls back to {models}", {
+              models: member.candidates
+                .slice(1)
+                .map((candidate) => props.label(candidate.providerInstanceId, candidate.modelId))
+                .join(gt(", then ", { $context: "separator between fallback model names" })),
+            })}
           </span>
         ) : null}
         {props.primaryCooldown ? (
@@ -279,9 +293,12 @@ export function MemberDetail(props: {
               variant="outline"
               onClick={() => props.onClearCooldown(props.primaryCooldown!)}
             >
-              Try{" "}
-              {props.label(props.primaryCooldown.providerInstanceId, props.primaryCooldown.modelId)}{" "}
-              again now
+              {gt("Try {model} again now", {
+                model: props.label(
+                  props.primaryCooldown.providerInstanceId,
+                  props.primaryCooldown.modelId,
+                ),
+              })}
             </Button>
           </div>
         ) : null}
@@ -292,7 +309,7 @@ export function MemberDetail(props: {
           <div>
             <Button size="xs" variant="outline" onClick={() => props.onOpenThread(childThreadId)}>
               <ExternalLinkIcon />
-              Open their thread
+              <T>Open their thread</T>
             </Button>
           </div>
           <MessageMember
@@ -305,11 +322,11 @@ export function MemberDetail(props: {
 
       <section className="flex flex-col gap-2">
         <h4 className="font-medium text-muted-foreground text-xs">
-          {isLead ? "Handed out" : "Assignments"}
+          {isLead ? gt("Handed out") : gt("Assignments")}
         </h4>
         {(isLead ? (run?.tasks ?? []) : tasks).length === 0 ? (
           <p className="text-muted-foreground text-xs">
-            {isLead ? "Nothing delegated yet." : "Nothing assigned yet."}
+            {isLead ? gt("Nothing delegated yet.") : gt("Nothing assigned yet.")}
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -330,7 +347,9 @@ export function MemberDetail(props: {
 
       {votes.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h4 className="font-medium text-muted-foreground text-xs">Verdicts</h4>
+          <h4 className="font-medium text-muted-foreground text-xs">
+            <T>Verdicts</T>
+          </h4>
           <ul className="flex flex-col gap-2">
             {votes.map(({ round, vote }) => (
               <li
@@ -355,7 +374,7 @@ export function MemberDetail(props: {
       {member.instructions.trim() ? (
         <Collapsible>
           <CollapsibleTrigger className="cursor-pointer font-medium text-muted-foreground text-xs hover:text-foreground">
-            Their brief
+            <T>Their brief</T>
           </CollapsibleTrigger>
           <CollapsiblePanel>
             <div className="pt-2 text-sm">
@@ -376,6 +395,8 @@ function TaskStory(props: {
   readonly cwd: string | undefined;
   readonly threadRef: ScopedThreadRef;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { task } = props;
   const status = TASK_STATUS[task.status];
   const hasMore = task.result !== null || task.attempts.length > 0;
@@ -389,10 +410,12 @@ function TaskStory(props: {
           <span className="min-w-0">
             <span className="block font-medium">{task.title}</span>
             {props.assignee ? (
-              <span className="block text-muted-foreground">to {props.assignee}</span>
+              <span className="block text-muted-foreground">
+                {gt("to {assignee}", { assignee: props.assignee })}
+              </span>
             ) : null}
           </span>
-          <Badge variant={status.variant}>{status.label}</Badge>
+          <Badge variant={status.variant}>{messages(status.label)}</Badge>
         </CollapsibleTrigger>
         <CollapsiblePanel>
           <div className="flex flex-col gap-2 border-t px-3 py-2">
@@ -424,13 +447,29 @@ export function VoteBadge(props: {
 }) {
   switch (props.decision) {
     case "approve":
-      return <Badge variant="success">Approve</Badge>;
+      return (
+        <Badge variant="success">
+          <T>Approve</T>
+        </Badge>
+      );
     case "reject":
-      return <Badge variant="error">Reject</Badge>;
+      return (
+        <Badge variant="error">
+          <T>Reject</T>
+        </Badge>
+      );
     case "abstain":
-      return <Badge variant="outline">Abstain</Badge>;
+      return (
+        <Badge variant="outline">
+          <T>Abstain</T>
+        </Badge>
+      );
     case "pending":
-      return <Badge variant="outline">Thinking</Badge>;
+      return (
+        <Badge variant="outline">
+          <T>Thinking</T>
+        </Badge>
+      );
   }
 }
 
@@ -440,6 +479,7 @@ function MessageMember(props: {
   readonly threadId: ThreadId;
   readonly name: string;
 }) {
+  const gt = useGT();
   const startTurn = useOrchestrationCommand(threadEnvironment.startTurn, { reportFailure: false });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -449,7 +489,10 @@ function MessageMember(props: {
     if (!message || sending) return;
     const shell = readThreadShell(scopeThreadRef(props.environmentId, props.threadId));
     if (shell === null) {
-      toastManager.add({ type: "error", title: `${props.name}'s thread is not loaded yet.` });
+      toastManager.add({
+        type: "error",
+        title: m(msg("{name}'s thread is not loaded yet.", { name: props.name })),
+      });
       return;
     }
     setSending(true);
@@ -467,14 +510,14 @@ function MessageMember(props: {
       if (!isAtomCommandInterrupted(result)) {
         toastManager.add({
           type: "error",
-          title: `Could not message ${props.name}`,
+          title: m(msg("Could not message {name}", { name: props.name })),
           description: String(squashAtomCommandFailure(result)),
         });
       }
       return;
     }
     setText("");
-    toastManager.add({ type: "success", title: `Sent to ${props.name}` });
+    toastManager.add({ type: "success", title: m(msg("Sent to {name}", { name: props.name })) });
   };
 
   return (
@@ -487,7 +530,7 @@ function MessageMember(props: {
     >
       <Textarea
         value={text}
-        placeholder={`Message ${props.name}`}
+        placeholder={gt("Message {name}", { name: props.name })}
         rows={2}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
@@ -500,7 +543,7 @@ function MessageMember(props: {
       <div className="flex justify-end">
         <Button size="xs" type="submit" disabled={sending || text.trim().length === 0}>
           <SendIcon />
-          {sending ? "Sending…" : "Send"}
+          {sending ? gt("Sending…") : gt("Send")}
         </Button>
       </div>
     </form>

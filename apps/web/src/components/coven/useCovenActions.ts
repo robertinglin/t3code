@@ -14,7 +14,9 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { useRouter } from "@tanstack/react-router";
+import { msg } from "gt-react";
 
+import { m } from "~/i18n/messages";
 import { readLocalApi } from "../../localApi";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -148,7 +150,10 @@ export function useCovenActions(environmentId: EnvironmentId) {
       },
     });
     if (result._tag === "Failure") {
-      reportCovenFailure(input.approve ? "Could not approve" : "Could not reject", result);
+      reportCovenFailure(
+        input.approve ? m(msg("Could not approve")) : m(msg("Could not reject")),
+        result,
+      );
       return false;
     }
     return true;
@@ -156,7 +161,7 @@ export function useCovenActions(environmentId: EnvironmentId) {
 
   const clearCooldown = async (providerInstanceId: string, modelId: string) => {
     reportCovenFailure(
-      "Could not clear the cooldown",
+      m(msg("Could not clear the cooldown")),
       await clearCovenCooldown({ environmentId, input: { providerInstanceId, modelId } }),
     );
   };
@@ -182,7 +187,7 @@ export function useCovenActions(environmentId: EnvironmentId) {
       },
     });
     if (result._tag === "Failure") {
-      reportCovenFailure("Could not start the coven builder", result);
+      reportCovenFailure(m(msg("Could not start the coven builder")), result);
       return false;
     }
     openThread(result.value.builderThreadId);
@@ -193,18 +198,27 @@ export function useCovenActions(environmentId: EnvironmentId) {
   const deleteCoven = async (coven: { readonly id: CovenId; readonly name: string }) => {
     const confirmed = await readLocalApi()?.dialogs.confirm(
       [
-        `Delete the ${coven.name} coven?`,
-        "It disappears from the coven picker. Threads using it go back to a single agent, and any coven work still in progress is cancelled. Run notes already written stay in the project.",
+        m(msg("Delete the {name} coven?", { name: coven.name })),
+        m(
+          msg(
+            "It disappears from the coven picker. Threads using it go back to a single agent, and any coven work still in progress is cancelled. Run notes already written stay in the project.",
+          ),
+        ),
       ].join("\n"),
       { variant: "destructive" },
     );
     if (!confirmed) return false;
     const result = await archiveCoven({ environmentId, input: { covenId: coven.id } });
     if (result._tag === "Failure") {
-      reportCovenFailure("Could not delete the coven", result);
+      reportCovenFailure(m(msg("Could not delete the coven")), result);
       return false;
     }
-    toastManager.add(stackedThreadToast({ type: "success", title: `Deleted ${coven.name}` }));
+    toastManager.add(
+      stackedThreadToast({
+        type: "success",
+        title: m(msg("Deleted {name}", { name: coven.name })),
+      }),
+    );
     return true;
   };
 

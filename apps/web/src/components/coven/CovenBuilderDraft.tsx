@@ -1,6 +1,9 @@
 import type { CovenDraft, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { parseCovenSource } from "@t3tools/shared/covenDefinition";
+import { msg, T, useGT, Var } from "gt-react";
 import { useEffect, useEffectEvent, useState } from "react";
+
+import { m } from "~/i18n/messages";
 
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -54,9 +57,10 @@ export function BuilderDraftPanel({
   const saveCovenDraft = useAtomCommand(serverEnvironment.saveCovenDraft, {
     label: "coven draft save",
   });
+  const gt = useGT();
   const [saving, setSaving] = useState(false);
   const parsed = parseCovenSource(draft.source);
-  const name = parsed.ok ? parsed.definition.frontMatter.name : "Coven draft";
+  const name = parsed.ok ? parsed.definition.frontMatter.name : gt("Coven draft");
 
   const save = async () => {
     if (saving || !parsed.ok) return;
@@ -64,13 +68,18 @@ export function BuilderDraftPanel({
     const result = await saveCovenDraft({ environmentId, input: { draftId: draft.id } });
     setSaving(false);
     if (result._tag === "Failure") {
-      reportCovenFailure("Could not save the coven", result);
+      reportCovenFailure(m(msg("Could not save the coven")), result);
       return;
     }
     toastManager.add(
       stackedThreadToast({
         type: "success",
-        title: `Saved ${result.value.summary.name} · revision ${result.value.summary.revision}`,
+        title: m(
+          msg("Saved {name} · revision {revision}", {
+            name: result.value.summary.name,
+            revision: result.value.summary.revision,
+          }),
+        ),
       }),
     );
   };
@@ -78,26 +87,47 @@ export function BuilderDraftPanel({
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2.5 text-xs">
       <p className="flex justify-between gap-2">
-        <span className="truncate font-medium">Draft: {name}</span>
+        <span className="truncate font-medium">
+          <T>
+            Draft: <Var>{name}</Var>
+          </T>
+        </span>
         <span className="shrink-0 text-muted-foreground">v{draft.version}</span>
       </p>
       {parsed.ok ? (
-        <p className="text-muted-foreground">Valid</p>
+        <p className="text-muted-foreground">
+          <T>Valid</T>
+        </p>
       ) : (
         <p className="text-destructive-foreground" role="alert">
-          {parsed.issues.length} problem{parsed.issues.length === 1 ? "" : "s"}:{" "}
-          {parsed.issues[0]?.path ? `${parsed.issues[0].path}: ` : ""}
-          {parsed.issues[0]?.message}
+          {parsed.issues[0]?.path
+            ? gt(
+                "{count, plural, one {{count} problem} other {{count} problems}}: {path}: {message}",
+                {
+                  count: parsed.issues.length,
+                  path: parsed.issues[0].path,
+                  message: parsed.issues[0].message,
+                },
+              )
+            : gt("{count, plural, one {{count} problem} other {{count} problems}}: {message}", {
+                count: parsed.issues.length,
+                message: parsed.issues[0]?.message ?? "",
+              })}
         </p>
       )}
       {draft.lastChangeSummary ? (
         <p className="line-clamp-2 text-muted-foreground">
-          Last change by {draft.lastChangeBy === "builder" ? "the builder" : "you"}:{" "}
-          {draft.lastChangeSummary}
+          {draft.lastChangeBy === "builder"
+            ? gt("Last change by the builder: {summary}", { summary: draft.lastChangeSummary })
+            : gt("Last change by you: {summary}", { summary: draft.lastChangeSummary })}
         </p>
       ) : null}
       {draft.savedRevision === null ? null : (
-        <p className="text-muted-foreground">Saved as revision {draft.savedRevision}</p>
+        <p className="text-muted-foreground">
+          <T>
+            Saved as revision <Var>{draft.savedRevision}</Var>
+          </T>
+        </p>
       )}
       <div className="flex gap-1">
         <Button
@@ -111,10 +141,10 @@ export function BuilderDraftPanel({
             })
           }
         >
-          Open draft
+          <T>Open draft</T>
         </Button>
         <Button size="xs" disabled={saving || !parsed.ok} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save coven"}
+          {saving ? gt("Saving…") : gt("Save coven")}
         </Button>
       </div>
     </div>
