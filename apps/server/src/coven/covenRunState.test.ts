@@ -8,7 +8,9 @@ import {
 import { renderCovenRunDocs } from "./covenRunDocs.ts";
 import { covenLeaderNote } from "./covenWorkerTask.ts";
 import {
+  advanceRotation,
   approvePendingPlan,
+  pickRoleCandidate,
   delegatableRoles,
   delegationRefusal,
   isChatPlanApproval,
@@ -166,6 +168,43 @@ describe("coven run state", () => {
         [],
       ).pickedLeader?.modelId,
     ).toBe("claude-opus-5-5");
+  });
+
+  it("takes turns through a rotation and picks the model with the most headroom", () => {
+    const pool = [
+      { providerInstanceId: "a", modelId: "model-a" },
+      { providerInstanceId: "b", modelId: "model-b" },
+      { providerInstanceId: "c", modelId: "model-c" },
+    ];
+    const role = (id: string) => ({
+      id,
+      kind: "worker" as const,
+      name: id,
+      responsibility: "",
+      rotation: "loop",
+      candidates: pool,
+    });
+    let state = running(initialRunState({ definition, leaderCandidateIndex: 0 }));
+    const turns: string[] = [];
+    for (const id of ["implementer", "reviewer", "implementer", "reviewer"]) {
+      const index = pickRoleCandidate(role(id), state, [], 0)!;
+      turns.push(`${id}:${pool[index]!.modelId}`);
+      state = advanceRotation(state, role(id), index);
+    }
+    expect(turns).toEqual([
+      "implementer:model-a",
+      "reviewer:model-b",
+      "implementer:model-c",
+      "reviewer:model-a",
+    ]);
+    // A model out of quota is skipped, wrapping around.
+    const cooling = [{ ...pool[0]!, resetAt: "2999-01-01T00:00:00.000Z" }];
+    expect(pickRoleCandidate(role("implementer"), { rotations: { loop: 0 } }, cooling, 0)).toBe(1);
+    const headroomRole = { ...role("worker"), rotation: undefined, pick: "most-headroom" as const };
+    const room: Record<string, number | null> = { "model-a": 10, "model-b": 80, "model-c": null };
+    expect(
+      pickRoleCandidate(headroomRole, state, [], 0, undefined, (c) => room[c.modelId] ?? null),
+    ).toBe(1);
   });
 
   it("tells the leader where each gate stands so late results aren't handled twice", () => {

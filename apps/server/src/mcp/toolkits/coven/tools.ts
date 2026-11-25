@@ -28,6 +28,8 @@ const CovenRoleView = Schema.Struct({
   kind: Schema.String,
   name: Schema.String,
   responsibility: Schema.String,
+  /** Roles sharing a rotation take turns through the same models, round-robin. */
+  rotation: Schema.optional(Schema.String),
   candidates: Schema.Array(CovenCandidateView),
 });
 

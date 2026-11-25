@@ -82,6 +82,43 @@ describe("parseCovenSource", () => {
     expect(await covenDigest(a.definition)).toBe(await covenDigest(b.definition));
   });
 
+  it("accepts a round-robin rotation and rejects mismatched ones", () => {
+    const pool = [
+      { providerInstanceId: "claude", modelId: "opus" },
+      { providerInstanceId: "codex", modelId: "gpt-5" },
+    ];
+    const withRoles = (reviewerModels: typeof pool, pick?: "most-headroom") =>
+      withCovenFrontMatter(starterCovenSource({ id: "rr", name: "RR", leader }), (frontMatter) => ({
+        ...frontMatter,
+        roles: [
+          ...(frontMatter.roles as ReadonlyArray<unknown>),
+          {
+            id: "implementer",
+            kind: "worker",
+            name: "Implementer",
+            responsibility: "Implements",
+            rotation: "loop",
+            candidates: pool,
+            ...(pick ? { pick } : {}),
+          },
+          {
+            id: "reviewer",
+            kind: "worker",
+            name: "Reviewer",
+            responsibility: "Reviews",
+            rotation: "loop",
+            candidates: reviewerModels,
+          },
+        ],
+      }));
+    expect(parseCovenSource(withRoles(pool)).ok).toBe(true);
+    const mismatched = parseCovenSource(withRoles(pool.toReversed()));
+    expect(!mismatched.ok && mismatched.issues.map((issue) => issue.message).join()).toContain(
+      'rotation "loop" must list the same models',
+    );
+    expect(parseCovenSource(withRoles(pool, "most-headroom")).ok).toBe(false);
+  });
+
   it("rewrites front matter fields without touching the body", () => {
     const starter = starterCovenSource({ id: "cv1", name: "T", leader });
     const updated = withCovenFrontMatter(starter, (frontMatter) => ({

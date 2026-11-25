@@ -47,6 +47,17 @@ export const CovenRole = Schema.Struct({
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
   responsibility: ShortText(500),
   candidates: Schema.Array(CovenCandidate).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
+  /**
+   * Round-robin: worker roles with the same rotation take turns through one shared list of
+   * models. Each new task goes to the next model, so with an implementer and a reviewer in one
+   * rotation, the model that implemented is never the one that reviews it.
+   */
+  rotation: Schema.optional(CovenRoleId),
+  /**
+   * How the role picks a model for each task. `order` (the default) takes the first one with
+   * quota left. `most-headroom` takes the one with the most usage limit left right now.
+   */
+  pick: Schema.optional(Schema.Literals(["order", "most-headroom"])),
 });
 export type CovenRole = typeof CovenRole.Type;
 

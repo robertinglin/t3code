@@ -46,6 +46,15 @@ export function covenLeaderNote(input: {
     .join("; ");
   const gates = frontMatter.governance.gates.map((gate) => `${gate.id} (${gate.type}, ${gate.on})`);
   const lead = frontMatter.roles.find((role) => role.kind === "orchestrator");
+  const rotationLines = [
+    ...new Set(frontMatter.roles.flatMap((role) => (role.rotation ? [role.rotation] : []))),
+  ].map((rotation) => {
+    const members = frontMatter.roles.filter((role) => role.rotation === rotation);
+    const models = members[0]!.candidates;
+    const next = models[(run?.state.rotations?.[rotation] ?? 0) % models.length]!;
+    return `Rotation "${rotation}": ${members.map((role) => role.id).join(" and ")} take turns over ${models.map((model) => model.modelId).join(", ")}, one model per task, so whoever did the last task doesn't check it. Delegate them in alternation (for example implement, then review). The next task goes to ${next.modelId}.`;
+  });
+  const headroomRoles = frontMatter.roles.filter((role) => role.pick === "most-headroom");
   const lines = [
     userLed
       ? `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). The user picked you as its orchestrator: you lead, plan and delegate. Its lead role ${lead?.id ?? ""} no longer leads, but it keeps its other duties (reviews, for example) as a subagent: hand it that work with coven_delegate_role, and leave its gate votes to it.`
@@ -53,6 +62,10 @@ export function covenLeaderNote(input: {
     workers === ""
       ? "It has no worker roles, so do the work yourself."
       : `Worker roles: ${workers}. Hand work to them with coven_delegate_role; call coven_capabilities for the mission and limits, and coven_task_status for progress. Generic delegation tools and your own built-in subagents are turned off here, so don't start subagents yourself.`,
+    ...rotationLines,
+    headroomRoles.length > 0
+      ? `${headroomRoles.map((role) => role.id).join(", ")} ${headroomRoles.length === 1 ? "picks" : "pick"} whichever of its models has the most usage limit left when you delegate.`
+      : "",
   ];
   if (run !== null) {
     const status = run.state.status;

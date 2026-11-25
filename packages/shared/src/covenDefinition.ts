@@ -122,6 +122,32 @@ function validateCovenSemantics(definition: CovenDefinition): CovenValidationIss
       candidateKeys.add(key);
     });
   });
+  const rotations = new Map<string, { readonly index: number; readonly models: string }>();
+  frontMatter.roles.forEach((role, index) => {
+    if (role.rotation === undefined) return;
+    const path = `roles.${index}.rotation`;
+    if (role.kind !== "worker") {
+      issues.push({ path, message: "Only worker roles can take turns in a rotation." });
+      return;
+    }
+    if (role.pick === "most-headroom") {
+      issues.push({ path, message: "A role takes turns or picks by headroom, not both." });
+    }
+    if (role.candidates.length < 2) {
+      issues.push({ path, message: "A rotation needs at least two models to take turns." });
+    }
+    const models = JSON.stringify(
+      role.candidates.map((candidate) => [candidate.providerInstanceId, candidate.modelId]),
+    );
+    const first = rotations.get(role.rotation);
+    if (first === undefined) rotations.set(role.rotation, { index, models });
+    else if (first.models !== models) {
+      issues.push({
+        path: `roles.${index}.candidates`,
+        message: `Roles in rotation "${role.rotation}" must list the same models in the same order as "${frontMatter.roles[first.index]!.id}".`,
+      });
+    }
+  });
   const orchestrators = frontMatter.roles.filter((role) => role.kind === "orchestrator");
   if (orchestrators.length !== 1) {
     issues.push({
@@ -291,7 +317,7 @@ export function withCovenFrontMatter(
   const parts = splitFrontMatter(normalized);
   const current = parts ? (parseDocument(parts.yaml).toJS() as Record<string, unknown>) : {};
   const body = parts ? parts.body : normalized;
-  return `---\n${stringify(update(current ?? {}), { lineWidth: 0 })}---\n${body}`;
+  return `---\n${stringify(update(current ?? {}), { lineWidth: 0, aliasDuplicateObjects: false })}---\n${body}`;
 }
 
 /** Stable digest over the semantic content: parsed front matter and section text. */
@@ -364,5 +390,5 @@ export function starterCovenSource(input: {
     },
     limits: DEFAULT_COVEN_LIMITS,
   };
-  return `---\n${stringify(frontMatter, { lineWidth: 0 })}---\n# ${input.name}\n\n## Mission\n${input.mission?.trim() ? `${input.mission.trim()}\n` : ""}\n## Shared Guidance\nThe orchestrator owns assignments. Workers report to the orchestrator, not one another.\n\n## Role: lead\nCreate an initial plan for approval, then coordinate the work.\n\n## Role: builder\nMake focused changes and report what changed and how you verified it.\n`;
+  return `---\n${stringify(frontMatter, { lineWidth: 0, aliasDuplicateObjects: false })}---\n# ${input.name}\n\n## Mission\n${input.mission?.trim() ? `${input.mission.trim()}\n` : ""}\n## Shared Guidance\nThe orchestrator owns assignments. Workers report to the orchestrator, not one another.\n\n## Role: lead\nCreate an initial plan for approval, then coordinate the work.\n\n## Role: builder\nMake focused changes and report what changed and how you verified it.\n`;
 }

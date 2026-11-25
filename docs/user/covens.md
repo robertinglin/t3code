@@ -65,6 +65,36 @@ its thread), anything waiting on you, recent activity, and models that are cooli
   cooldown from the sidebar. The leader can't start new work for a role whose models are all
   cooling down.
 
+## Round-robin and headroom
+
+A role normally uses its first model and falls back to the next when a quota runs out. Two other
+ways to pick a model:
+
+- **Round-robin.** Give worker roles the same `rotation` name and the same list of models, and
+  they take turns over those models, one model per task. With an implementer and a reviewer in
+  rotation `loop` over Opus, GPT and Astra, Opus implements, GPT reviews it, Astra implements the
+  next task, Opus reviews that, and so on, so a model never reviews its own work. The orchestrator
+  stays outside the loop and directs it. A model that is out of quota is skipped for its turn.
+- **Most headroom.** Set `pick: most-headroom` on a role and each task goes to whichever of its
+  models has the most usage limit left. A weekly limit is weighed by pace, so it compares fairly
+  with a 5-hour one: half the week's quota left with half the week to go counts as a full 5-hour
+  window. A model whose provider reports no limits is used only when none of the others has room.
+  You can't use this and `rotation` on the same role.
+
+```yaml
+roles:
+  - id: implementer
+    kind: worker
+    rotation: loop
+    candidates: [opus, gpt, astra]
+  - id: reviewer
+    kind: worker
+    rotation: loop
+    candidates: [opus, gpt, astra]
+```
+
+The candidates are shortened here; write them out in full, as in any other role.
+
 ## Gates
 
 Gates in `governance.gates` decide when the team must stop and check its work:

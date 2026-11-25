@@ -754,6 +754,49 @@ function limitsNotice(limits: ServerProviderUsageLimits): string | null {
   return limits.windows.length === 0 ? "No limits reported." : null;
 }
 
+/** The usage windows that hold back one model of a provider. */
+export function usageWindowsForModel(
+  provider: ServerProvider | undefined,
+  model: string,
+): ServerProviderUsageWindow[] {
+  return (provider?.usageLimits?.windows ?? []).filter(
+    (window) =>
+      (window.modelIds === undefined || window.modelIds.includes(model)) &&
+      (window.providerIds === undefined ||
+        window.providerIds.includes(model.split("/")[0] ?? "")) &&
+      (provider?.driver !== "antigravity" || antigravityWindowLimitsModel(window, model)),
+  );
+}
+
+const SESSION_WINDOW_MINUTES = 5 * 60;
+
+/**
+ * How much room a model has for the next session, as a percent of a full session's worth, so
+ * models with different limits compare fairly. A session-length window counts what is left of
+ * it. A longer one, such as a weekly limit, counts what is left against the time left: half the
+ * week's quota with half the week to go is a full session's share (100), a tenth of it is 20.
+ * The tightest window decides. Null when the provider reports no limits for the model.
+ */
+export function sessionHeadroom(
+  windows: ReadonlyArray<ServerProviderUsageWindow>,
+  now: number,
+): number | null {
+  let headroom: number | null = null;
+  for (const window of windows) {
+    const left = 100 - Math.max(0, Math.min(100, window.usedPercent));
+    const resetsAt = resetMillis(window);
+    const minutes = window.windowDurationMins;
+    let share = left;
+    if (resetsAt !== null && resetsAt <= now) share = 100;
+    else if (minutes !== undefined && minutes > SESSION_WINDOW_MINUTES && resetsAt !== null) {
+      const timeLeft = Math.min(1, (resetsAt - now) / (minutes * MINUTE));
+      share = timeLeft > 0 ? left / timeLeft : 100;
+    }
+    headroom = headroom === null ? share : Math.min(headroom, share);
+  }
+  return headroom;
+}
+
 export function remainingPercent(window: ServerProviderUsageWindow): number {
   return Math.round(100 - Math.max(0, Math.min(100, window.usedPercent)));
 }

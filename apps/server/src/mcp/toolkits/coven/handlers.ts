@@ -21,8 +21,10 @@ import * as Schema from "effect/Schema";
 import * as CovenControlService from "../../../coven/CovenControlService.ts";
 import * as CovenService from "../../../coven/CovenService.ts";
 import {
+  advanceRotation,
   delegationRefusal,
   delegatableRoles,
+  pickRoleCandidate,
   leaderRole,
   type CovenRunRecord,
   type CovenTaskState,
@@ -227,6 +229,7 @@ const makeHandlers = (
               kind: role.kind,
               name: role.name,
               responsibility: role.responsibility,
+              ...(role.rotation === undefined ? {} : { rotation: role.rotation }),
               candidates: role.candidates.map((candidate) => ({
                 providerInstanceId: candidate.providerInstanceId,
                 modelId: candidate.modelId,
@@ -336,7 +339,14 @@ const makeHandlers = (
         }
         const cooldowns = yield* covens.cooldowns.pipe(Effect.mapError(toMcpFailure));
         const now = yield* nowIso;
-        const index = pickCovenCandidate(role.candidates, 0, cooldowns, Date.parse(now));
+        const index = pickRoleCandidate(
+          role,
+          run.state,
+          cooldowns,
+          Date.parse(now),
+          undefined,
+          yield* control.candidateHeadroom,
+        );
         if (index === null) {
           return yield* failure(
             "provider_unavailable",
@@ -403,11 +413,15 @@ const makeHandlers = (
         yield* covens
           .updateRun(run.id, (record) =>
             Effect.succeed({
-              state: {
-                ...record.state,
-                delegations: record.state.delegations + 1,
-                tasks: [...record.state.tasks, task],
-              },
+              state: advanceRotation(
+                {
+                  ...record.state,
+                  delegations: record.state.delegations + 1,
+                  tasks: [...record.state.tasks, task],
+                },
+                role,
+                index,
+              ),
               events: [
                 {
                   kind: "task.delegated",

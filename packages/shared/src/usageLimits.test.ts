@@ -7,6 +7,7 @@ import {
   type UsageLimitSourceAccount,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -25,6 +26,7 @@ import {
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
+  sessionHeadroom,
 } from "./usageLimits.ts";
 import { collectLimitNotices } from "./usageLimitsCopy.ts";
 
@@ -1999,5 +2001,36 @@ describe("ChatGPT sharing presentation", () => {
         auth: { status: "unauthenticated", subscriptionSharing: true },
       }),
     ).toBe(false);
+  });
+});
+
+describe("session headroom", () => {
+  const now = Date.parse("2026-11-24T12:00:00.000Z");
+  const hours = (n: number) => DateTime.formatIso(DateTime.makeUnsafe(now + n * 3_600_000));
+  it("counts a weekly limit by pace so it compares with a 5-hour one", () => {
+    const weekly = (usedPercent: number, resetsInHours: number) => ({
+      id: "weekly",
+      kind: "weekly" as const,
+      label: "Weekly",
+      usedPercent,
+      resetsAt: hours(resetsInHours),
+      windowDurationMins: 7 * 24 * 60,
+    });
+    const session = {
+      id: "session",
+      kind: "session" as const,
+      label: "5h",
+      usedPercent: 30,
+      resetsAt: hours(2),
+      windowDurationMins: 300,
+    };
+    // Half the week's quota left with half the week to go is a full session's share.
+    expect(sessionHeadroom([weekly(50, 84)], now)).toBeCloseTo(100);
+    // A tenth left with half the week to go is a fifth of a session.
+    expect(sessionHeadroom([weekly(90, 84)], now)).toBeCloseTo(20);
+    // The tightest window decides.
+    expect(sessionHeadroom([session, weekly(50, 84)], now)).toBeCloseTo(70);
+    expect(sessionHeadroom([session, weekly(90, 84)], now)).toBeCloseTo(20);
+    expect(sessionHeadroom([], now)).toBeNull();
   });
 });

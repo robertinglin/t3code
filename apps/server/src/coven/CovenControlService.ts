@@ -30,9 +30,11 @@ import {
   starterCovenSource,
 } from "@t3tools/shared/covenDefinition";
 import { modelSelectionCommandType } from "@t3tools/shared/model";
+import { sessionHeadroom, usageWindowsForModel } from "@t3tools/shared/usageLimits";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -60,6 +62,7 @@ import {
   leaderRole,
   openGateRound,
   passedGate,
+  pickRoleCandidate,
   replaceLatestAttempt,
   replaceTask,
   runtimeWarningMinutes,
@@ -68,6 +71,7 @@ import {
   type CovenRunState,
   type CovenTaskState,
 } from "./covenRunState.ts";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as CovenService from "./CovenService.ts";
 
 export interface CovenGateRequest {
@@ -138,6 +142,13 @@ export class CovenControlService extends Context.Service<
       message: string,
     ) => Effect.Effect<void, CovenError>;
     readonly memoryExcerpt: (run: CovenRunRecord) => Effect.Effect<string>;
+    /** Each model's usage headroom right now, for roles that pick the model with the most room. */
+    readonly candidateHeadroom: Effect.Effect<
+      (candidate: {
+        readonly providerInstanceId: string;
+        readonly modelId: string;
+      }) => number | null
+    >;
     readonly startBuilder: (
       input: CovenStartBuilderInput,
     ) => Effect.Effect<CovenStartBuilderResult, CovenError>;
@@ -180,6 +191,30 @@ const make = Effect.gen(function* () {
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
   const uuid = random.uuidV4();
   const handledRuns = yield* Ref.make(new Set<string>());
+  const providerRegistry = yield* Effect.serviceOption(
+    ProviderInstanceRegistry.ProviderInstanceRegistry,
+  );
+
+  const candidateHeadroom: CovenControlService["Service"]["candidateHeadroom"] = Effect.gen(
+    function* () {
+      if (Option.isNone(providerRegistry)) return () => null;
+      const snapshots = yield* providerRegistry.value.listInstances.pipe(
+        Effect.flatMap((instances) =>
+          Effect.forEach(instances, (instance) => instance.snapshot.getSnapshot),
+        ),
+        Effect.orElseSucceed(() => []),
+      );
+      const now = Date.parse(yield* nowIso);
+      return (candidate: { readonly providerInstanceId: string; readonly modelId: string }) =>
+        sessionHeadroom(
+          usageWindowsForModel(
+            snapshots.find((provider) => provider.instanceId === candidate.providerInstanceId),
+            candidate.modelId,
+          ),
+          now,
+        );
+    },
+  );
 
   const withWorkspace = <A, E>(
     effect: Effect.Effect<
@@ -293,9 +328,17 @@ const make = Effect.gen(function* () {
       const definition = yield* covens.definitionAt(state.binding.covenId, state.binding.revision);
       if (definition === null) return state;
       const now = Date.parse(yield* nowIso);
-      const candidates = leaderRole(definition).candidates;
-      const index = pickCovenCandidate(candidates, 0, yield* covens.cooldowns, now) ?? 0;
-      yield* switchThreadModel(threadId, candidates[index]!);
+      const lead = leaderRole(definition);
+      const index =
+        pickRoleCandidate(
+          lead,
+          {},
+          yield* covens.cooldowns,
+          now,
+          undefined,
+          yield* candidateHeadroom,
+        ) ?? 0;
+      yield* switchThreadModel(threadId, lead.candidates[index]!);
       return state;
     },
   );
@@ -467,6 +510,7 @@ const make = Effect.gen(function* () {
               resumeStatus: null,
               resumedAt: now,
             };
+            const headroom = yield* candidateHeadroom;
             const restarts: Array<{ task: CovenTaskState; candidate: CovenCandidate }> = [];
             for (const task of record.state.tasks.filter(
               (candidate) => candidate.status === "blocked",
@@ -475,7 +519,14 @@ const make = Effect.gen(function* () {
                 (candidate) => candidate.id === task.roleId,
               );
               if (!role || !task.childThreadId) continue;
-              const index = pickCovenCandidate(role.candidates, 0, cooldowns, nowMs);
+              const index = pickRoleCandidate(
+                role,
+                record.state,
+                cooldowns,
+                nowMs,
+                role.rotation === undefined ? undefined : task.candidateIndex - 1,
+                headroom,
+              );
               if (index === null) {
                 return yield* policyDenied(
                   `Every model for ${role.name} is still out of quota. Clear a cooldown or wait.`,
@@ -1209,7 +1260,14 @@ const make = Effect.gen(function* () {
       reason: failureMessage,
       recordedAt: now,
     });
-    const nextIndex = pickCovenCandidate(role.candidates, 0, yield* covens.cooldowns, nowMs);
+    const nextIndex = pickRoleCandidate(
+      role,
+      run.state,
+      yield* covens.cooldowns,
+      nowMs,
+      role.rotation === undefined ? undefined : task.candidateIndex,
+      yield* candidateHeadroom,
+    );
     if (nextIndex === null) {
       yield* covens.updateRun(run.id, (record) =>
         Effect.succeed({
@@ -1332,7 +1390,14 @@ const make = Effect.gen(function* () {
       reason: shell.lastError ?? "Usage limit reached.",
       recordedAt: now,
     });
-    const nextIndex = pickCovenCandidate(role.candidates, 0, yield* covens.cooldowns, nowMs);
+    const nextIndex = pickRoleCandidate(
+      role,
+      run.state,
+      yield* covens.cooldowns,
+      nowMs,
+      undefined,
+      yield* candidateHeadroom,
+    );
     const limitReached =
       run.state.leaderTransitions >= definition.frontMatter.limits.maxLeadershipTransitionsPerRun;
     if (nextIndex === null || limitReached) {
@@ -1621,6 +1686,7 @@ const make = Effect.gen(function* () {
     completeRun,
     reportToLeader,
     memoryExcerpt,
+    candidateHeadroom,
     startBuilder,
     saveDraft,
   });

@@ -452,13 +452,28 @@ function CovenRolesView({
             {role.responsibility ? (
               <p className="text-muted-foreground text-xs">{role.responsibility}</p>
             ) : null}
+            {role.rotation ? (
+              <p className="text-xs">
+                Takes turns in rotation <span className="font-mono">{role.rotation}</span>: each
+                task goes to the next model.
+              </p>
+            ) : role.pick === "most-headroom" ? (
+              <p className="text-xs">Uses the model with the most usage limit left.</p>
+            ) : null}
             <ol className="mt-1 flex flex-col gap-0.5 text-xs">
               {role.candidates.map((candidate, index) => {
                 const described = describeCovenCandidate(providers, candidate);
                 return (
                   <li key={`${candidate.providerInstanceId}:${candidate.modelId}`}>
                     <span className="text-muted-foreground">
-                      {index === 0 ? "Primary" : `Fallback ${index}`}:{" "}
+                      {role.rotation
+                        ? `Turn ${index + 1}`
+                        : role.pick === "most-headroom"
+                          ? "Option"
+                          : index === 0
+                            ? "Primary"
+                            : `Fallback ${index}`}
+                      :{" "}
                     </span>
                     {described.modelLabel}
                     <span className="text-muted-foreground">

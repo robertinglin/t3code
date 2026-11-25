@@ -4,12 +4,19 @@ import type {
   CovenEventSummary,
   CovenGateRound,
   CovenPendingApproval,
+  CovenRole,
   CovenRunStatus,
   CovenRunView,
   CovenTask,
   ThreadId,
 } from "@t3tools/contracts";
-import { applicableCovenGates, covenGateElectorate } from "@t3tools/shared/covenRuntime";
+import {
+  applicableCovenGates,
+  covenGateElectorate,
+  pickCovenCandidate,
+} from "@t3tools/shared/covenRuntime";
+
+type CovenCooldownLike = Parameters<typeof pickCovenCandidate>[2][number];
 
 /** A task as the run stores it: the public task plus the bookkeeping the engine needs. */
 export interface CovenTaskState extends CovenTask {
@@ -40,6 +47,8 @@ export interface CovenRunState {
    * orchestrates; the lead role keeps its other duties (reviews, say) as a subagent.
    */
   readonly pickedLeader?: CovenModelRef | undefined;
+  /** Round-robin: where each rotation's next task starts in its shared model list. */
+  readonly rotations?: Readonly<Record<string, number>> | undefined;
   readonly tasks: ReadonlyArray<CovenTaskState>;
   readonly gates: ReadonlyArray<CovenGateRound>;
   readonly pendingApprovals: ReadonlyArray<CovenPendingApproval>;
@@ -86,6 +95,59 @@ export const ACTIVE_TASK_STATUSES: ReadonlySet<CovenTask["status"]> = new Set([
 
 export function leaderRole(definition: CovenDefinition) {
   return definition.frontMatter.roles.find((role) => role.kind === "orchestrator")!;
+}
+
+/**
+ * Which of a role's models takes its next task. A rotating role starts at its rotation's turn and
+ * wraps around past models that are out of quota; other roles start at their primary.
+ */
+export function pickRoleCandidate(
+  role: CovenRole,
+  state: Pick<CovenRunState, "rotations">,
+  cooldowns: ReadonlyArray<CovenCooldownLike>,
+  nowMs: number,
+  after?: number,
+  headroom?: (candidate: CovenRole["candidates"][number]) => number | null,
+): number | null {
+  const count = role.candidates.length;
+  if (role.pick === "most-headroom" && headroom !== undefined) {
+    // The most room wins; models that report no limits come after those that do, in order.
+    let best: { readonly index: number; readonly score: number } | null = null;
+    role.candidates.forEach((candidate, index) => {
+      if (pickCovenCandidate(role.candidates, index, cooldowns, nowMs) !== index) return;
+      const room = headroom(candidate);
+      const score = room === null ? -1 : room;
+      if (room !== null && room <= 0) return;
+      if (best === null || score > best.score) best = { index, score };
+    });
+    if (best !== null) return (best as { readonly index: number }).index;
+  }
+  const start =
+    after !== undefined
+      ? after + 1
+      : role.rotation === undefined
+        ? 0
+        : (state.rotations?.[role.rotation] ?? 0);
+  if (role.rotation === undefined)
+    return pickCovenCandidate(role.candidates, start, cooldowns, nowMs);
+  for (let step = 0; step < count; step++) {
+    const index = (start + step) % count;
+    if (pickCovenCandidate(role.candidates, index, cooldowns, nowMs) === index) return index;
+  }
+  return null;
+}
+
+/** After a rotating role takes a task on model `index`, the next task goes to the model after it. */
+export function advanceRotation(
+  state: CovenRunState,
+  role: CovenRole,
+  index: number,
+): CovenRunState {
+  if (role.rotation === undefined) return state;
+  return {
+    ...state,
+    rotations: { ...state.rotations, [role.rotation]: (index + 1) % role.candidates.length },
+  };
 }
 
 /** True when the selection is one of the lead role's models. */
