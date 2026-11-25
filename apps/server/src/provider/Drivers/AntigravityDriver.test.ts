@@ -441,7 +441,9 @@ it.layer(layerTest)("AntigravityDriver", (it) => {
             modelSelection,
             runtimePolicy: cliPolicy,
           });
-          expect(h.launches.at(-1)?.args).toEqual([
+          // Usage limits read the sign-in token from the OS keyring, which is a launch too.
+          const agentLaunch = h.launches.findLast((launch) => launch.args[0] === "acp");
+          expect(agentLaunch?.args).toEqual([
             "acp",
             "--gemini-dir",
             h.profileDirectory,
