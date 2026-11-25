@@ -1,3 +1,4 @@
+import { ProviderInstanceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
   parseCovenSource,
@@ -171,11 +172,10 @@ describe("coven run state", () => {
   });
 
   it("takes turns through a rotation and picks the model with the most headroom", () => {
-    const pool = [
-      { providerInstanceId: "a", modelId: "model-a" },
-      { providerInstanceId: "b", modelId: "model-b" },
-      { providerInstanceId: "c", modelId: "model-c" },
-    ];
+    const pool = ["a", "b", "c"].map((name) => ({
+      providerInstanceId: ProviderInstanceId.make(name),
+      modelId: `model-${name}`,
+    }));
     const role = (id: string) => ({
       id,
       kind: "worker" as const,
@@ -200,7 +200,8 @@ describe("coven run state", () => {
     // A model out of quota is skipped, wrapping around.
     const cooling = [{ ...pool[0]!, resetAt: "2999-01-01T00:00:00.000Z" }];
     expect(pickRoleCandidate(role("implementer"), { rotations: { loop: 0 } }, cooling, 0)).toBe(1);
-    const headroomRole = { ...role("worker"), rotation: undefined, pick: "most-headroom" as const };
+    const { rotation: _rotation, ...worker } = role("worker");
+    const headroomRole = { ...worker, pick: "most-headroom" as const };
     const room: Record<string, number | null> = { "model-a": 10, "model-b": 80, "model-c": null };
     expect(
       pickRoleCandidate(headroomRole, state, [], 0, undefined, (c) => room[c.modelId] ?? null),

@@ -21,8 +21,8 @@ export class AnalyticsService extends Context.Service<
 export const layer = Layer.succeed(
   AnalyticsService,
   AnalyticsService.of({
-    record: () => Effect.void,
+    record: Effect.fn("AnalyticsService.record")(() => Effect.void),
     flush: Effect.void,
-    recordOwners: () => Effect.void,
+    recordOwners: Effect.fn("AnalyticsService.recordOwners")(() => Effect.void),
   }),
 );
