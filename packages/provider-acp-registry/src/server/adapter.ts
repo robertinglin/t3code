@@ -20,6 +20,7 @@ import {
   makeCopilotSubagentRouting,
 } from "./copilotAcp.ts";
 import { prepareBiliRegistrySpawn } from "./biliLaunchers.ts";
+import { configureGlmAcpAgentSpawn, configureGlmAcpModels } from "./glmAcpModels.ts";
 import { defaultInstanceIdForDriver, ProviderDriverKind } from "@t3tools/contracts";
 import { prefersHttpMcpTransport } from "./mcpTransport.ts";
 import { readCustomModelEntries } from "@t3tools/shared/model";
@@ -165,11 +166,12 @@ function makeAcpRegistryRuntime(
       const launcherPolicy = Option.getOrUndefined(
         yield* Effect.serviceOption(AgentLauncherPolicy),
       );
-      let spawn = resolved.spawn;
+      let spawn = configureGlmAcpModels(options.settings, resolved.spawn);
+      spawn = configureGlmAcpAgentSpawn(options.settings, spawn);
       if (launcherPolicy !== undefined) {
         spawn = yield* prepareBiliRegistrySpawn({
           settings: options.settings,
-          spawn: resolved.spawn,
+          spawn,
           policy: launcherPolicy,
         });
       }

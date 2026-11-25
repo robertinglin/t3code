@@ -38,7 +38,8 @@
     "@t3tools/provider-acp": "workspace:*",
     "@t3tools/provider-core": "workspace:*",
     "@t3tools/shared": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "glm-acp-agent": "github:stefandevo/glm-acp-agent#39ecd3f6b2bf39f7ba2eb62f087390b222ad47d"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",

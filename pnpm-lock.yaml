@@ -408,6 +408,7 @@ patchedDependencies:
   expo-sharing@58.0.22: 321a86e1471e34c53f1f2937fbb4304ea3f7b7a78ad9e4d35febc2b9e73e9688
   expo-video@58.0.13: e80ec3ef8c4af50a607beea1c0917e71ba679844efdb702b45d17a5f03cf466c
   expo-widgets@58.0.27: 0e26817ca487a5156bcc9499f7db2e99a7d102f4a53b6b738f00552958774c86
+  glm-acp-agent@1.17.1: 61fa45bf8d76ce480c7bc11511d96d5ba4588980253d0b5f73f14c7f664fecf6
   mdast-util-math@3.0.0: afe6b2c89e1eaddfd3c90cf2723f12c9a17d513e65beff51653781486013251c
   mdast-util-to-hast@13.2.1: 57ea46c73aea3c876ab8d351fe0482ddd081dcb4a0610576e399dbe5eb59d2b1
   micromark-extension-gfm-table@2.1.1: 9ad23a530e45d9f83cba1da8654fe16d5af8b59d5c73d5c7a7c91fd25b9be1d8
@@ -1764,6 +1765,9 @@ importers:
       effect:
         specifier: 4.1.5
         version: 4.1.5
+      glm-acp-agent:
+        specifier: github:stefandevo/glm-acp-agent#39ecd3f6b2bf39f7ba2eb62f087390b222ad47d
+        version: https://codeload.github.com/stefandevo/glm-acp-agent/tar.gz/39ecd3f6b2bf39f7ba2eb62f087390b222ad47d3(patch_hash=61fa45bf8d76ce480c7bc11511d96d5ba4588980253d0b5f73f14c7f664fecf6)(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
     devDependencies:
       '@effect/platform-node':
         specifier: 4.1.5
@@ -2713,6 +2717,11 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  '@agentclientprotocol/sdk@0.20.0':
+    resolution: {integrity: sha512-BxEHyE4MvwyOsdyVPub1vEtyrq8E0JSdjC+ckXWimY1VabFCTXdPyXv2y2Omz1j+iod7Z8oBJDXFCJptM0GBqQ==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@ai-sdk/provider@4.0.36':
     resolution: {integrity: sha512-GqvWZSZdBelCGughlBdOoupT258rgM3YMbaLAS9WSZJ0vlt8c9vm3My+ZT31mYhiReMCMCF2qF2axnGbILpk1A==}
@@ -9872,6 +9881,12 @@ packages:
   github-slugger@2.0.0:
     resolution: {integrity: sha512-IaOQ9puYtjrkq7Y0Ygl9KDZnrf/aiUJYUpVf89y8kyaxbRG7Y1SrX/jaumrv81vc61+kiMempujsM3Yw7w5qcw==}
 
+  glm-acp-agent@https://codeload.github.com/stefandevo/glm-acp-agent/tar.gz/39ecd3f6b2bf39f7ba2eb62f087390b222ad47d3:
+    resolution: {gitHosted: true, integrity: sha512-QE1i0tbGR0LSMoaE1lrUgeb25WotPQ5m1QS72qo8Rr1zCXWdqCLsuVCJ5PZG+hcw8J8+kuUfRa5DbsNKcSFiEw==, tarball: https://codeload.github.com/stefandevo/glm-acp-agent/tar.gz/39ecd3f6b2bf39f7ba2eb62f087390b222ad47d3}
+    version: 1.17.1
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+    hasBin: true
+
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
@@ -11148,6 +11163,26 @@ packages:
   open@8.4.2:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
+
+  openai@6.49.0:
+    resolution: {integrity: sha512-aYCc0C6L864eR6WSYIwQGyXriw/nIyZx0ObvhzOEVuk0zoBDpynjSbrionWI7q65B5H8jJX0DXR9snEzM6bfPg==}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      ws: 8.22.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   openid-client@6.8.8:
     resolution: {integrity: sha512-ZsucJA5Ad04Uv7YN4ql+s4GXNmb9uAYQwyJTsJx7CH/MX3JZioLE2pVKi1SC+YrbSLA4Px3Gi30dMjgOZtb6pA==}
@@ -13161,6 +13196,9 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
@@ -13195,6 +13233,10 @@ snapshots:
   2g@1.0.1(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
+
+  '@agentclientprotocol/sdk@0.20.0(zod@3.25.76)':
+    dependencies:
+      zod: 3.25.76
 
   '@ai-sdk/provider@4.0.36':
     dependencies:
@@ -20063,6 +20105,18 @@ snapshots:
 
   github-slugger@2.0.0: {}
 
+  glm-acp-agent@https://codeload.github.com/stefandevo/glm-acp-agent/tar.gz/39ecd3f6b2bf39f7ba2eb62f087390b222ad47d3(patch_hash=61fa45bf8d76ce480c7bc11511d96d5ba4588980253d0b5f73f14c7f664fecf6)(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
+    dependencies:
+      '@agentclientprotocol/sdk': 0.20.0(zod@3.25.76)
+      openai: 6.49.0(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
+      undici: 6.29.1
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - ws
+
   glob-parent@5.1.2:
     dependencies:
       is-glob: 4.0.3
@@ -21869,6 +21923,11 @@ snapshots:
       define-lazy-prop: 2.0.0
       is-docker: 2.2.1
       is-wsl: 2.2.0
+
+  openai@6.49.0(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76):
+    optionalDependencies:
+      ws: 8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      zod: 3.25.76
 
   openid-client@6.8.8:
     dependencies:
@@ -24275,6 +24334,8 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@4.6.7):
     dependencies:
       zod: 4.6.7
+
+  zod@3.25.76: {}
 
   zod@4.6.7: {}
 

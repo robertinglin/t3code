@@ -1,3 +1,7 @@
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeModule from "node:module";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -96,9 +100,33 @@ describe("resolveBiliRegistryLauncher", () => {
     expect(enableGlmAcpProxySupport("different upstream transport")).toBeUndefined();
   });
 
+  it("can patch the pinned GLM agent package transport", () => {
+    const agentEntryPath = NodeModule.createRequire(import.meta.url).resolve("glm-acp-agent");
+    const clientPath = NodePath.join(NodePath.dirname(agentEntryPath), "llm", "glm-client.js");
+    const source = NodeFS.readFileSync(clientPath, "utf8");
+
+    expect(enableGlmAcpProxySupport(source)).toContain("EnvHttpProxyAgent");
+  });
+
   it("locates the managed GLM ACP transport beside its npm launcher", () => {
     expect(glmAcpClientModulePath("/managed/npm/bin/glm-acp-agent")).toBe(
       "/managed/npm/lib/node_modules/glm-acp-agent/dist/llm/glm-client.js",
+    );
+  });
+
+  it("locates the GLM ACP transport for a Node-launched package entry", () => {
+    expect(
+      glmAcpClientModulePath("/usr/bin/node", ["/repo/node_modules/glm-acp-agent/dist/index.js"]),
+    ).toBe("/repo/node_modules/glm-acp-agent/dist/llm/glm-client.js");
+  });
+
+  it("locates the GLM ACP transport beside a pnpm workspace launcher", () => {
+    expect(
+      glmAcpClientModulePath(
+        "/data/programs/t3code/packages/provider-acp-registry/node_modules/.bin/glm-acp-agent",
+      ),
+    ).toBe(
+      "/data/programs/t3code/packages/provider-acp-registry/node_modules/glm-acp-agent/dist/llm/glm-client.js",
     );
   });
 

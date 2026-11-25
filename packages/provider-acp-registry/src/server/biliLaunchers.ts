@@ -60,16 +60,25 @@ export function biliNodeCaBundlePath(dataHome: string | undefined, home: string)
   );
 }
 
-export function glmAcpClientModulePath(commandPath: string): string {
-  return NodePath.join(
-    NodePath.dirname(NodePath.dirname(commandPath)),
-    "lib",
-    "node_modules",
-    "glm-acp-agent",
-    "dist",
-    "llm",
-    "glm-client.js",
-  );
+export function glmAcpClientModulePath(
+  commandPath: string,
+  commandArgs: ReadonlyArray<string> = [],
+): string {
+  const entryPath = commandArgs[0];
+  if (
+    entryPath !== undefined &&
+    NodePath.basename(entryPath) === "index.js" &&
+    NodePath.basename(NodePath.dirname(entryPath)) === "dist"
+  ) {
+    return NodePath.join(NodePath.dirname(entryPath), "llm", "glm-client.js");
+  }
+
+  const binDirectory = NodePath.dirname(commandPath);
+  const packageDirectory =
+    NodePath.basename(binDirectory) === ".bin"
+      ? NodePath.join(NodePath.dirname(binDirectory), "glm-acp-agent")
+      : NodePath.join(NodePath.dirname(binDirectory), "lib", "node_modules", "glm-acp-agent");
+  return NodePath.join(packageDirectory, "dist", "llm", "glm-client.js");
 }
 
 export function enableGlmAcpProxySupport(source: string): string | undefined {
@@ -106,7 +115,7 @@ export const prepareBiliRegistrySpawn = Effect.fn("BiliLaunchers.prepareRegistry
     ) {
       yield* Effect.try({
         try: () => {
-          const clientModulePath = glmAcpClientModulePath(input.spawn.command);
+          const clientModulePath = glmAcpClientModulePath(input.spawn.command, input.spawn.args);
           const clientSource = NodeFS.readFileSync(clientModulePath, "utf8");
           const proxyAwareClientSource = enableGlmAcpProxySupport(clientSource);
           if (proxyAwareClientSource === undefined) {
