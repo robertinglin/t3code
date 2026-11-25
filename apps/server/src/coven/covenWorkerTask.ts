@@ -1,6 +1,6 @@
 import type { CovenDefinition, CovenGateRound, CovenRole } from "@t3tools/contracts";
 
-import type { CovenRunRecord } from "./covenRunState.ts";
+import { pendingReviews, reviewHandoffCall, type CovenRunRecord } from "./covenRunState.ts";
 
 /** The prompt a coven worker receives: its role brief, the coven's guidance, then the task. */
 export function buildCovenWorkerTask(input: {
@@ -63,11 +63,30 @@ export function covenLeaderNote(input: {
       ? "It has no worker roles, so do the work yourself."
       : `Worker roles: ${workers}. Hand work to them with coven_delegate_role; call coven_capabilities for the mission and limits, coven_task_status for progress, and coven_cancel_task to cancel a stuck or unneeded task and free its slot. Generic delegation tools and your own built-in subagents are turned off here, so don't start subagents yourself.`,
     ...rotationLines,
+    ...frontMatter.roles.flatMap((role) =>
+      role.reviewedBy === undefined
+        ? []
+        : [
+            `Required review: ${role.reviewedBy} reviews every task ${role.id} finishes. When one finishes, hand it over with coven_delegate_role and reviewOf set to that task id. ${role.id} gets no new work while a finished task has no review under way, and the work can't complete until every review has finished.`,
+          ],
+    ),
     headroomRoles.length > 0
       ? `${headroomRoles.map((role) => role.id).join(", ")} ${headroomRoles.length === 1 ? "picks" : "pick"} whichever of its models has the most usage limit left when you delegate.`
       : "",
   ];
   if (run !== null) {
+    const waiting = pendingReviews(run.state, input.definition);
+    if (waiting.length > 0) {
+      lines.push(
+        `Reviews still owed: ${waiting
+          .map((review) =>
+            review.underway
+              ? `${review.task.id} (${review.reviewerRoleId} is on it)`
+              : `${review.task.id}: ${reviewHandoffCall(review)}`,
+          )
+          .join("; ")}.`,
+      );
+    }
     const status = run.state.status;
     if (status === "awaiting_plan") {
       lines.push(

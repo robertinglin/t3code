@@ -1,4 +1,4 @@
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
   parseCovenSource,
@@ -17,6 +17,8 @@ import {
   isChatPlanApproval,
   isLeadModel,
   leaderRole,
+  pendingReviews,
+  reviewHandoffRefusal,
   runtimeWarningMinutes,
   initialRunState,
   toRunView,
@@ -206,6 +208,95 @@ describe("coven run state", () => {
     expect(
       pickRoleCandidate(headroomRole, state, [], 0, undefined, (c) => room[c.modelId] ?? null),
     ).toBe(1);
+  });
+
+  it("makes a role's required review a rule, not a suggestion", () => {
+    const reviewedSource = withCovenFrontMatter(source, (frontMatter) => ({
+      ...frontMatter,
+      roles: (frontMatter.roles as ReadonlyArray<Record<string, unknown>>).map((role) =>
+        role.id === "builder" ? { ...role, reviewedBy: "reviewer" } : role,
+      ),
+      governance: { ...(frontMatter.governance as object), gates: [] },
+    }));
+    const reviewedParsed = parseCovenSource(reviewedSource);
+    if (!reviewedParsed.ok) throw new Error(JSON.stringify(reviewedParsed.issues));
+    const reviewed = reviewedParsed.definition;
+    const at = "2026-01-01T00:00:00.000Z";
+    const task = (
+      id: string,
+      roleId: string,
+      status: "running" | "completed" | "failed",
+      reviewOf?: string,
+    ) => ({
+      id,
+      roleId,
+      title: id,
+      status,
+      workspace: "shared" as const,
+      dependsOn: [],
+      childThreadId: ThreadId.make(`thread-${id}`),
+      result: null,
+      attempts: [],
+      ...(reviewOf === undefined ? {} : { reviewOf }),
+      createdAt: at,
+      updatedAt: at,
+      clientRequestId: null,
+      candidateIndex: 0,
+      transientRetries: 0,
+    });
+    const base = running(initialRunState({ definition: reviewed, leaderCandidateIndex: 0 }));
+    const slice = { ...base, tasks: [task("slice-1", "builder", "completed")] };
+
+    // The finished slice is owed a review, and the builder gets nothing new until it starts.
+    expect(pendingReviews(slice, reviewed)).toMatchObject([
+      { task: { id: "slice-1" }, reviewerRoleId: "reviewer", underway: false },
+    ]);
+    expect(reviewHandoffRefusal(slice, reviewed, "builder", undefined)).toMatch(
+      /reviewOf: "slice-1"/,
+    );
+    expect(
+      covenLeaderNote({
+        binding: { name: "R", revision: 1 },
+        definition: reviewed,
+        run: {
+          id: "run",
+          leaderThreadId: ThreadId.make("leader"),
+          covenId: "c",
+          revision: 1,
+          startedAt: at,
+          updatedAt: at,
+          state: slice,
+        } as never,
+      }),
+    ).toContain('reviewOf: "slice-1"');
+
+    // Reviews must name a finished task of a role this one reviews.
+    expect(reviewHandoffRefusal(slice, reviewed, "reviewer", "slice-1")).toBeNull();
+    expect(reviewHandoffRefusal(slice, reviewed, "builder", "slice-1")).toMatch(
+      /reviewed by reviewer/,
+    );
+    expect(reviewHandoffRefusal(slice, reviewed, "reviewer", "nope")).toMatch(/no task nope/);
+
+    // Once the review is under way the builder can move on; it is still owed until it finishes.
+    const reviewing = {
+      ...slice,
+      tasks: [...slice.tasks, task("review-1", "reviewer", "running", "slice-1")],
+    };
+    expect(reviewHandoffRefusal(reviewing, reviewed, "builder", undefined)).toBeNull();
+    expect(pendingReviews(reviewing, reviewed)).toMatchObject([{ underway: true }]);
+
+    // A failed review has to be handed out again.
+    const failedReview = {
+      ...slice,
+      tasks: [...slice.tasks, task("review-1", "reviewer", "failed", "slice-1")],
+    };
+    expect(reviewHandoffRefusal(failedReview, reviewed, "builder", undefined)).not.toBeNull();
+
+    const done = {
+      ...slice,
+      tasks: [...slice.tasks, task("review-1", "reviewer", "completed", "slice-1")],
+    };
+    expect(pendingReviews(done, reviewed)).toEqual([]);
   });
 
   it("tells the leader where each gate stands so late results aren't handled twice", () => {

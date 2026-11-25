@@ -22,7 +22,6 @@ import {
   COVEN_DEFAULT_COOLDOWN_MS,
   covenGateElectorate,
   evaluateCovenGate,
-  pickCovenCandidate,
   type CovenGateContext,
 } from "@t3tools/shared/covenRuntime";
 import {
@@ -63,6 +62,8 @@ import {
   leaderRole,
   openGateRound,
   passedGate,
+  pendingReviews,
+  reviewHandoffCall,
   pickRoleCandidate,
   replaceLatestAttempt,
   replaceTask,
@@ -992,6 +993,22 @@ const make = Effect.gen(function* () {
               } as CovenCompletionResult,
             };
           }
+          const unreviewed = pendingReviews(record.state, definition);
+          if (unreviewed.length > 0) {
+            return {
+              state: record.state,
+              result: {
+                completed: false,
+                reason: `These tasks still need their review: ${unreviewed
+                  .map(
+                    (review) =>
+                      `"${review.task.title}" (${review.task.id}) by ${review.reviewerRoleId}`,
+                  )
+                  .join(", ")}. Hand each over with ${reviewHandoffCall(unreviewed[0]!)}.`,
+                requiredGates: [],
+              } as CovenCompletionResult,
+            };
+          }
           const gates = definition.frontMatter.governance.gates;
           const required = [
             ...applicableCovenGates(gates, "before-completion", input.context),
@@ -1177,6 +1194,13 @@ const make = Effect.gen(function* () {
 
     if (outcome === "completed") {
       yield* finish("completed", null, null);
+      if (role.reviewedBy !== undefined && task.reviewOf === undefined) {
+        const review = { task, reviewerRoleId: role.reviewedBy };
+        yield* notifyLeader(
+          run,
+          `${role.name} finished "${task.title}" (${task.id}). This coven requires ${role.reviewedBy} to review it, so hand it over now: ${reviewHandoffCall(review)}. Its report is attached to the review for you. ${task.roleId} gets no new work, and the work can't complete, until that review is under way and finished.`,
+        );
+      }
       if (source === "resume") {
         yield* notifyLeader(
           run,

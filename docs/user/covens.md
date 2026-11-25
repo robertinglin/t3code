@@ -95,6 +95,29 @@ roles:
 
 The candidates are shortened here; write them out in full, as in any other role.
 
+## Required reviews
+
+Guidance in the coven's body, like "Astra reviews each slice", is advice the leader can forget.
+To make it a rule, set `reviewedBy` on the worker role whose work must be checked:
+
+```yaml
+roles:
+  - id: gemini
+    kind: worker
+    reviewedBy: astra
+  - id: astra
+    kind: worker
+```
+
+Then the coven enforces it:
+
+- When a `gemini` task finishes, the coven tells the leader to hand it to `astra` right away. The
+  review gets Gemini's report attached, so nothing depends on the leader copying it over.
+- `gemini` gets no new work while one of its finished tasks has no review under way. It can start
+  the next slice as soon as Astra has the previous one.
+- The work can't complete until every review has finished. A failed or cancelled review has to be
+  handed out again.
+
 ## Gates
 
 Gates in `governance.gates` decide when the team must stop and check its work:
@@ -119,22 +142,22 @@ directory instead.
 
 ## Commands
 
-| Command                      | What it does                                         |
-| ---------------------------- | ---------------------------------------------------- |
-| `/coven list`                | Show saved covens.                                   |
-| `/coven change <name>`       | Use a coven in this thread.                          |
-| `/coven off`                 | Stop using a coven in this thread.                   |
-| `/coven show [name]`         | Show a coven's roles and models.                     |
-| `/coven status`              | Show the run: status, leader, tasks, what's waiting. |
-| `/coven pause`               | Pause the run and interrupt running work.            |
-| `/coven resume`              | Continue a paused run.                               |
-| `/coven stop`                | Cancel the work in flight. The coven stays.          |
-| `/coven delete [name]`       | Delete a coven and take it off every thread.         |
-| `/coven approve [note]`      | Approve the plan or gate that is waiting on you.     |
-| `/coven reject [note]`       | Reject it.                                           |
-| `/coven edit [name]`         | Open the editor.                                     |
-| `/coven export [name]`       | Copy the Markdown definition.                        |
-| `/coven-build <description>` | Start a builder chat for a new coven.                |
+| Command                      | What it does                                          |
+| ---------------------------- | ----------------------------------------------------- |
+| `/coven list`                | Show saved covens.                                    |
+| `/coven change <name>`       | Use a coven in this thread.                           |
+| `/coven off`                 | Stop using a coven in this thread.                    |
+| `/coven show [name]`         | Show a coven's roles and models.                      |
+| `/coven status`              | Show the run: status, leader, tasks, what's waiting.  |
+| `/coven pause`               | Pause the run and interrupt running work.             |
+| `/coven resume`              | Continue a paused run.                                |
+| `/coven stop`                | Cancel the work in flight. The coven stays.           |
+| `/coven delete [name]`       | Delete a coven and take it off every thread.          |
+| `/coven approve [note]`      | Approve the plan or gate that is waiting on you.      |
+| `/coven reject [note]`       | Reject it.                                            |
+| `/coven edit [name]`         | Open the editor.                                      |
+| `/coven export [name]`       | Copy the Markdown definition.                         |
+| `/coven-build <description>` | Start a builder chat for a new coven.                 |
 | `/coven-edit [name]`         | Revise a saved coven with the builder (no new coven). |
 
 ## Limits

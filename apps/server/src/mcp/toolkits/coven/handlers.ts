@@ -3,15 +3,12 @@ import {
   OrchestratorMcpTargetOptions,
   type CovenDefinition,
   type CovenGateRound,
+  type NodeId,
   type OrchestratorMcpProviderCapability,
   type ThreadId,
 } from "@t3tools/contracts";
 import { parseCovenSource } from "@t3tools/shared/covenDefinition";
-import {
-  covenGateElectorate,
-  isCoolingDown,
-  pickCovenCandidate,
-} from "@t3tools/shared/covenRuntime";
+import { covenGateElectorate, isCoolingDown } from "@t3tools/shared/covenRuntime";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -23,6 +20,7 @@ import * as CovenService from "../../../coven/CovenService.ts";
 import {
   advanceRotation,
   delegationRefusal,
+  reviewHandoffRefusal,
   delegatableRoles,
   pickRoleCandidate,
   leaderRole,
@@ -305,7 +303,9 @@ const makeHandlers = (
             };
           }
         }
-        const refusal = delegationRefusal(run.state, definition, role.id);
+        const refusal =
+          delegationRefusal(run.state, definition, role.id) ??
+          reviewHandoffRefusal(run.state, definition, role.id, input.reviewOf);
         if (refusal !== null) return yield* failure("capability_denied", refusal);
         const limits = definition.frontMatter.limits;
         if (run.state.delegations >= limits.maxDelegationsPerRun) {
@@ -369,8 +369,33 @@ const makeHandlers = (
         const taskId = `task-${run.state.tasks.length + 1}-${(yield* random.uuidV4()).slice(0, 8)}`;
         const title = (input.title ?? input.task.split("\n")[0] ?? input.task).slice(0, 200);
         const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const reviewed =
+          input.reviewOf === undefined
+            ? undefined
+            : run.state.tasks.find((candidate) => candidate.id === input.reviewOf);
+        // A review carries the reviewed task's own report, so nothing depends on the leader
+        // passing it along.
+        const reviewReport =
+          reviewed === undefined
+            ? null
+            : yield* service.taskStatus(scope, reviewed.attempts.at(-1)!.id as NodeId).pipe(
+                Effect.map((status) => status.latestTerminalSummary ?? status.summary),
+                Effect.orElseSucceed(() => null),
+              );
+        const taskText =
+          reviewed === undefined
+            ? input.task
+            : [
+                input.task,
+                `You are reviewing task ${reviewed.id}, "${reviewed.title}", which ${reviewed.roleId} finished${
+                  reviewed.childThreadId === null ? "" : ` in thread ${reviewed.childThreadId}`
+                }.`,
+                reviewReport === null
+                  ? "Its report isn't available; read its thread."
+                  : `Its report:\n\n${reviewReport.slice(0, 20_000)}`,
+              ].join("\n\n");
         const delegated = yield* service.delegateTask(scope, {
-          task: buildCovenWorkerTask({ definition, role, task: input.task, memory, gateIds }),
+          task: buildCovenWorkerTask({ definition, role, task: taskText, memory, gateIds }),
           title: `${role.name}: ${title}`.slice(0, 512),
           target: {
             providerInstanceId: candidate.providerInstanceId,
@@ -389,6 +414,7 @@ const makeHandlers = (
           dependsOn: input.dependsOn ?? [],
           childThreadId: delegated.childThreadId,
           result: null,
+          ...(reviewed === undefined ? {} : { reviewOf: reviewed.id }),
           attempts: [
             {
               id: delegated.taskId,

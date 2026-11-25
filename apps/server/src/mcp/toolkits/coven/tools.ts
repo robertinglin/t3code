@@ -140,6 +140,12 @@ const CovenDelegateRoleTool = Tool.make("coven_delegate_role", {
     dependsOn: Schema.optional(
       Schema.Array(Schema.String).annotate({ description: "Task ids this task waits on." }),
     ),
+    reviewOf: Schema.optional(
+      Schema.String.annotate({
+        description:
+          "For a role's required review: the finished task id it reviews. Its report is attached for you.",
+      }),
+    ),
     clientRequestId: Schema.optional(
       text(256).annotate({ description: "Reuse it to retry the same delegation." }),
     ),

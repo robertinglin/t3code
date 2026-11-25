@@ -148,6 +148,20 @@ function validateCovenSemantics(definition: CovenDefinition): CovenValidationIss
       });
     }
   });
+  frontMatter.roles.forEach((role, index) => {
+    if (role.reviewedBy === undefined) return;
+    const path = `roles.${index}.reviewedBy`;
+    const reviewer = frontMatter.roles.find((candidate) => candidate.id === role.reviewedBy);
+    if (role.kind !== "worker") {
+      issues.push({ path, message: "Only worker roles can have a required reviewer." });
+    } else if (reviewer === undefined) {
+      issues.push({ path, message: `No role "${role.reviewedBy}" to review "${role.id}".` });
+    } else if (reviewer.kind !== "worker") {
+      issues.push({ path, message: "The reviewer must be a worker role." });
+    } else if (reviewer.id === role.id) {
+      issues.push({ path, message: "A role can't review its own work." });
+    }
+  });
   const orchestrators = frontMatter.roles.filter((role) => role.kind === "orchestrator");
   if (orchestrators.length !== 1) {
     issues.push({

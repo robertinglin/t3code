@@ -497,6 +497,17 @@ function CovenRolesView({
                 <T>Uses the model with the most usage limit left.</T>
               </p>
             ) : null}
+            {role.reviewedBy ? (
+              <p className="text-xs">
+                <T>
+                  Every finished task goes to{" "}
+                  <span className="font-mono">
+                    <Var>{role.reviewedBy}</Var>
+                  </span>{" "}
+                  for review.
+                </T>
+              </p>
+            ) : null}
             <ol className="mt-1 flex flex-col gap-0.5 text-xs">
               {role.candidates.map((candidate, index) => {
                 const described = describeCovenCandidate(providers, candidate);

@@ -58,6 +58,12 @@ export const CovenRole = Schema.Struct({
    * quota left. `most-headroom` takes the one with the most usage limit left right now.
    */
   pick: Schema.optional(Schema.Literals(["order", "most-headroom"])),
+  /**
+   * A worker role that must review every task this role finishes. The coven tells the leader to
+   * hand each finished task over, won't give this role new work while a finished task has no
+   * review under way, and won't let the work complete until every review has finished.
+   */
+  reviewedBy: Schema.optional(CovenRoleId),
 });
 export type CovenRole = typeof CovenRole.Type;
 
@@ -336,6 +342,8 @@ export const CovenTask = Schema.Struct({
   childThreadId: Schema.NullOr(ThreadId),
   result: Schema.NullOr(Schema.String),
   attempts: Schema.Array(CovenAttempt),
+  /** The task this one reviews, for a role's required review handoff. */
+  reviewOf: Schema.optional(Schema.String),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });

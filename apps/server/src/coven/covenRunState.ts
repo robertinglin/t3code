@@ -324,3 +324,85 @@ export function approvePendingPlan(state: CovenRunState, now: string): CovenRunS
     statusReason: null,
   };
 }
+
+// ── Required review handoffs ───────────────────────────────────────────
+
+/** A finished task whose role names a required reviewer, and how far its review has got. */
+export interface CovenPendingReview {
+  readonly task: CovenTaskState;
+  readonly reviewerRoleId: string;
+  /** A review task for it is running or queued. */
+  readonly underway: boolean;
+}
+
+/** Tasks from the current piece of work; earlier pieces were already checked when they finished. */
+function currentCycleTasks(state: CovenRunState): ReadonlyArray<CovenTaskState> {
+  const since = state.cycleStartedAt === undefined ? null : Date.parse(state.cycleStartedAt);
+  return since === null
+    ? state.tasks
+    : state.tasks.filter((task) => Date.parse(task.createdAt) >= since);
+}
+
+/** Finished tasks that still need their required review to finish, oldest first. */
+export function pendingReviews(
+  state: CovenRunState,
+  definition: CovenDefinition,
+): ReadonlyArray<CovenPendingReview> {
+  const tasks = currentCycleTasks(state);
+  return tasks.flatMap((task) => {
+    if (task.status !== "completed" || task.reviewOf !== undefined) return [];
+    const role = definition.frontMatter.roles.find((candidate) => candidate.id === task.roleId);
+    const reviewerRoleId = role?.reviewedBy;
+    if (reviewerRoleId === undefined) return [];
+    const reviews = state.tasks.filter((candidate) => candidate.reviewOf === task.id);
+    if (reviews.some((review) => review.status === "completed")) return [];
+    return [
+      {
+        task,
+        reviewerRoleId,
+        underway: reviews.some((review) => ACTIVE_TASK_STATUSES.has(review.status)),
+      },
+    ];
+  });
+}
+
+/** The exact call that hands a finished task to its reviewer. */
+export function reviewHandoffCall(review: Pick<CovenPendingReview, "task" | "reviewerRoleId">) {
+  return `coven_delegate_role(roleId: "${review.reviewerRoleId}", reviewOf: "${review.task.id}", task: …)`;
+}
+
+/**
+ * Why a delegation breaks the coven's review handoffs, or null when it doesn't. A review must
+ * name a finished task of a role this one reviews; and a role whose finished work has no review
+ * under way gets no new work until its reviewer has it.
+ */
+export function reviewHandoffRefusal(
+  state: CovenRunState,
+  definition: CovenDefinition,
+  roleId: string,
+  reviewOf: string | undefined,
+): string | null {
+  if (reviewOf !== undefined) {
+    const reviewed = state.tasks.find((task) => task.id === reviewOf);
+    if (reviewed === undefined) return `There is no task ${reviewOf} to review.`;
+    const role = definition.frontMatter.roles.find((candidate) => candidate.id === reviewed.roleId);
+    if (role?.reviewedBy !== roleId) {
+      return role?.reviewedBy === undefined
+        ? `${reviewed.roleId}'s work has no required reviewer, so leave out reviewOf.`
+        : `${reviewed.roleId}'s work is reviewed by ${role.reviewedBy}, not ${roleId}.`;
+    }
+    if (reviewed.status !== "completed") {
+      return `Task ${reviewOf} is ${reviewed.status}; review it once it has finished.`;
+    }
+    return null;
+  }
+  const waiting = pendingReviews(state, definition).filter(
+    (review) => review.task.roleId === roleId && !review.underway,
+  );
+  if (waiting.length === 0) return null;
+  return `${roleId} finished ${waiting
+    .map((review) => `"${review.task.title}" (${review.task.id})`)
+    .join(", ")} and its review hasn't started. Hand it over first: ${waiting
+    .map(reviewHandoffCall)
+    .join("; ")}.`;
+}
