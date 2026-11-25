@@ -1,11 +1,11 @@
 import { useGT, useMessages } from "gt-react";
-import { ExternalLinkIcon } from "lucide-react";
 
 import { useEnvironmentQuery } from "../../state/query";
 import { pxpipeStats } from "../../state/pxpipe";
 import type { EnvironmentUsageStatus } from "../../state/usage";
 import { Button } from "../ui/button";
 
+/* oxlint-disable react/iframe-missing-sandbox -- The fixed loopback dashboards need scripts and same-origin API calls; their ports are cross-origin to T3. */
 const NUMBER_FORMAT = new Intl.NumberFormat();
 
 export function UsageCompression({
@@ -51,7 +51,7 @@ function EnvironmentCompression({
   return (
     <section className="space-y-3 rounded-lg border p-4">
       <h2 className="text-base font-semibold">{environment.label}</h2>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3">
         <article className="flex min-w-0 flex-col gap-3 rounded-md border p-4">
           <div>
             <h3 className="font-medium">{gt("Billion Context")}</h3>
@@ -60,15 +60,12 @@ function EnvironmentCompression({
             </p>
           </div>
           {canOpenDashboards ? (
-            <a
-              className="mt-auto inline-flex w-fit items-center gap-2 text-sm text-primary underline-offset-4 hover:underline"
-              href="http://127.0.0.1:8787/__bili/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {gt("Open Bili dashboard")}
-              <ExternalLinkIcon aria-hidden className="size-3.5" />
-            </a>
+            <iframe
+              className="h-[34rem] w-full rounded-md bg-background"
+              sandbox="allow-scripts allow-same-origin allow-forms"
+              src="http://127.0.0.1:18787/__bili/"
+              title={gt("Billion Context")}
+            />
           ) : null}
         </article>
 
@@ -112,21 +109,20 @@ function EnvironmentCompression({
             </dl>
           ) : null}
           {canOpenDashboards ? (
-            <a
-              className="mt-auto inline-flex w-fit items-center gap-2 text-sm text-primary underline-offset-4 hover:underline"
-              href="http://127.0.0.1:47821/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {gt("Open pxpipe dashboard")}
-              <ExternalLinkIcon aria-hidden className="size-3.5" />
-            </a>
+            <iframe
+              className="h-[34rem] w-full rounded-md bg-background"
+              sandbox="allow-scripts allow-same-origin allow-forms"
+              src="http://127.0.0.1:47821/"
+              title="pxpipe"
+            />
           ) : null}
         </article>
       </div>
     </section>
   );
 }
+
+/* oxlint-enable react/iframe-missing-sandbox */
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

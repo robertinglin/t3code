@@ -37,10 +37,13 @@ Registry agents and custom ACP commands cannot use the Bili launcher.
 When pxpipe is installed and available on the T3 server's `PATH`, T3 starts its proxy with the
 server and stops the proxy when the server shuts down. You do not need to start it in a separate
 terminal. It listens on loopback port `47821` by default; its dashboard is at
-`http://127.0.0.1:47821/`. T3 launches Gemini CLI and Antigravity through pxpipe by default. In
-that provider instance's **Agent launcher** setting, choose **Native** to bypass pxpipe.
-Open **Usage > Compression** to see pxpipe's token savings and open the Billion Context or pxpipe
-dashboard for the selected environment.
+`http://127.0.0.1:47821/`. T3 launches Gemini CLI through pxpipe by default. Antigravity uses
+pxpipe for Google models and Bili for other models by default, restarting its session when you
+switch between those model families. In that provider instance's **Agent launcher** setting,
+choose **Native** to bypass the model-based launcher.
+Open **Usage > Compression** to see pxpipe's token savings and view the Bili and pxpipe dashboards
+inline for the selected local environment. The Bili launcher dashboard uses port `18787` while a
+Bili-launched agent is running; port `8787` is for a separately started Bili proxy.
 
 If T3 logs that the proxy did not start, check that `pxpipe` is on the server process's `PATH`
 and that another service is not already using the proxy port.

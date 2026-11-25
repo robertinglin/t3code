@@ -7,6 +7,7 @@ import {
   ProviderSessionId,
   ThreadId,
   ProviderSetupError,
+  type OrchestrationV2ProviderCapabilities,
 } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -210,6 +211,90 @@ it.effect("passes a pxpipe launcher selection into provider turns", () => {
       launcher: "pxpipe",
       biliBinaryPath: "bili",
     });
+  }).pipe(Effect.provide(registryLayer));
+});
+
+it.effect("routes Antigravity by model and restarts when the model leaves Google's family", () => {
+  const instanceId = ProviderInstanceId.make("antigravity_model_launcher");
+  const providerSessionId = ProviderSessionId.make("antigravity_model_launcher_session");
+  const observedLaunchers: Array<string> = [];
+  let delegatedTransitions = 0;
+  const runtime = {
+    startTurn: () =>
+      Effect.serviceOption(AgentLauncherPolicy.AgentLauncherPolicy).pipe(
+        Effect.map((setting) => {
+          observedLaunchers.push(Option.getOrUndefined(setting)?.launcher ?? "missing");
+        }),
+      ),
+  } as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime;
+  const driver = ProviderDriverKind.make("antigravity");
+  const adapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
+    ...makeAdapter(instanceId),
+    driver,
+    planSelectionTransition: () =>
+      Effect.sync(() => {
+        delegatedTransitions++;
+        return { type: "apply_on_next_turn" as const };
+      }),
+    openSession: () => Effect.succeed(runtime),
+  };
+  const instance = {
+    ...makeInstance(instanceId, adapter),
+    driverKind: driver,
+    agentLauncher: "model-aware" as const,
+  };
+  const registryLayer = ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
+    Layer.provide(ModelManifest.layerTest),
+    Layer.provide(
+      Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
+        getInstance: () => Effect.succeed(instance),
+        listInstances: Effect.succeed([instance]),
+      }),
+    ),
+    Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
+  );
+
+  return Effect.gen(function* () {
+    const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+    const routedAdapter = yield* registry.get(instanceId);
+    const googleSession = yield* routedAdapter.openSession({
+      threadId: ThreadId.make("antigravity-google-thread"),
+      providerSessionId,
+      modelSelection: { instanceId, model: "gemini-3.8-flash" },
+      runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: "/workspace" },
+    });
+    yield* googleSession.startTurn({} as never);
+
+    const otherSession = yield* routedAdapter.openSession({
+      threadId: ThreadId.make("antigravity-other-thread"),
+      providerSessionId,
+      modelSelection: { instanceId, model: "claude-sonnet-4-5" },
+      runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: "/workspace" },
+    });
+    yield* otherSession.startTurn({} as never);
+
+    assert.deepStrictEqual(observedLaunchers, ["pxpipe", "bili"]);
+    assert.deepStrictEqual(
+      yield* routedAdapter.planSelectionTransition({
+        current: { instanceId, model: "gemini-3.8-flash" },
+        target: { instanceId, model: "claude-sonnet-4-5" },
+        sessionCapabilities: {
+          sessions: { supportsModelSwitchInSession: true },
+        } as OrchestrationV2ProviderCapabilities,
+      }),
+      { type: "restart_session" },
+    );
+    assert.deepStrictEqual(
+      yield* routedAdapter.planSelectionTransition({
+        current: { instanceId, model: "gemini-3.8-flash" },
+        target: { instanceId, model: "gemini-3.8-pro" },
+        sessionCapabilities: {
+          sessions: { supportsModelSwitchInSession: true },
+        } as OrchestrationV2ProviderCapabilities,
+      }),
+      { type: "apply_on_next_turn" },
+    );
+    assert.strictEqual(delegatedTransitions, 1);
   }).pipe(Effect.provide(registryLayer));
 });
 

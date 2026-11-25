@@ -12,7 +12,7 @@ import {
   type SettingsSecretSlot,
   withSettingsSecrets,
 } from "@t3tools/contracts";
-import { isPxpipeDefaultProvider } from "@t3tools/contracts/pxpipe";
+import { defaultAgentLauncher } from "@t3tools/contracts/pxpipe";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
@@ -351,9 +351,7 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
     };
   }
 
-  const agentLauncher =
-    entry.agentLauncher ??
-    (isPxpipeDefaultProvider(entry.driver, typedConfig) ? "pxpipe" : undefined);
+  const agentLauncher = entry.agentLauncher ?? defaultAgentLauncher(entry.driver, typedConfig);
 
   return {
     kind: "live" as const,

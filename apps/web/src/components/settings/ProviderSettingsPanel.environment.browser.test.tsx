@@ -549,6 +549,30 @@ describe("EnvironmentProviderSettings provider list", () => {
     );
   });
 
+  it("routes Antigravity models by provider while keeping explicit launcher choices", async () => {
+    await setup();
+    const instanceId = ProviderInstanceId.make("antigravity_model_routed");
+    const instance = { driver: ProviderDriverKind.make("antigravity") };
+    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, providerInstances: { [instanceId]: instance } };
+    await setProviders([
+      {
+        ...provider(),
+        instanceId,
+        driver: ProviderDriverKind.make("antigravity"),
+      },
+    ]);
+    await using _screen = await render(panel({ targetInstanceId: instanceId }));
+    const launcher = page.getByRole("combobox", { name: "Agent launcher" });
+    await userEvent.click(launcher);
+    await expect
+      .element(page.getByRole("option", { name: "Default (Google: pxpipe; other: Bili)" }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("option", { name: "Billion Context (bili)" }))
+      .toBeVisible();
+    await expect.element(page.getByRole("option", { name: "pxpipe" })).toBeVisible();
+  });
+
   it("selects a provider when its row is clicked near the edge", async () => {
     await setup();
     await setProviders([provider()]);

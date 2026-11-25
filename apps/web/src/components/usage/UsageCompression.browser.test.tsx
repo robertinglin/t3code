@@ -64,7 +64,7 @@ const environments = [
   },
 ];
 
-it("reports pxpipe savings and links to both compression dashboards", async () => {
+it("reports pxpipe savings and embeds both compression dashboards", async () => {
   setup();
   await using _screen = await render(
     <UsageCompression
@@ -78,10 +78,11 @@ it("reports pxpipe savings and links to both compression dashboards", async () =
   await expect.element(page.getByText("36.0%")).toBeInTheDocument();
   await expect.element(page.getByText("12 / 20")).toBeInTheDocument();
 
-  const bili = page.getByRole("link", { name: "Open Bili dashboard" });
-  const pxpipe = page.getByRole("link", { name: "Open pxpipe dashboard" });
-  expect(bili.element().getAttribute("href")).toBe("http://127.0.0.1:8787/__bili/");
-  expect(pxpipe.element().getAttribute("href")).toBe("http://127.0.0.1:47821/");
+  const bili = page.getByTitle("Billion Context");
+  const pxpipe = page.getByTitle("pxpipe");
+  expect(bili.element().getAttribute("src")).toBe("http://127.0.0.1:18787/__bili/");
+  expect(pxpipe.element().getAttribute("src")).toBe("http://127.0.0.1:47821/");
+  expect(page.getByRole("link", { name: /dashboard/ }).query()).toBeNull();
 
   await userEvent.click(page.getByRole("button", { name: "Refresh" }));
   expect(state.refresh).toHaveBeenCalledOnce();
@@ -101,13 +102,13 @@ it("shows a clear message when pxpipe cannot report stats", async () => {
   expect(page.getByText("Tokens saved").query()).toBeNull();
 });
 
-it("hides local-only dashboard links for remote environments", async () => {
+it("hides local-only dashboards for remote environments", async () => {
   setup();
   await using _screen = await render(
     <UsageCompression environments={environments} dashboardEnvironmentIds={new Set()} />,
   );
 
   await expect.element(page.getByText("1,800")).toBeInTheDocument();
-  expect(page.getByRole("link", { name: "Open Bili dashboard" }).query()).toBeNull();
-  expect(page.getByRole("link", { name: "Open pxpipe dashboard" }).query()).toBeNull();
+  expect(page.getByTitle("Billion Context").query()).toBeNull();
+  expect(page.getByTitle("pxpipe").query()).toBeNull();
 });

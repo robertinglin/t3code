@@ -1,5 +1,5 @@
 import { BILI_AGENT_COMPATIBILITY, biliAgentIdForDriver } from "@t3tools/contracts/settings";
-import { isPxpipeDefaultProvider } from "@t3tools/contracts/pxpipe";
+import { isModelRoutedLauncherProvider, isPxpipeDefaultProvider } from "@t3tools/contracts/pxpipe";
 import type { ProviderInstanceConfig } from "@t3tools/contracts";
 import { T, useGT } from "gt-react";
 
@@ -31,19 +31,29 @@ export function ProviderInstanceLauncherSection({
       : undefined;
   const providerId = registryAgentId ?? biliAgentIdForDriver(instance.driver);
   const pxpipeDefault = isPxpipeDefaultProvider(instance.driver, providerConfig);
+  const modelRoutedDefault = isModelRoutedLauncherProvider(instance.driver);
+  const canSelectPxpipe = pxpipeDefault || modelRoutedDefault;
   const biliCompatible = BILI_AGENT_COMPATIBILITY.some(
     (entry) => entry.id === providerId && entry.supported,
   );
-  if (!biliCompatible && !pxpipeDefault) return null;
-  const defaultLauncher = pxpipeDefault ? "pxpipe" : defaultAgentLauncher;
+  if (!biliCompatible && !canSelectPxpipe) return null;
+  const defaultLauncher = modelRoutedDefault
+    ? gt("Google: pxpipe; other: Bili")
+    : pxpipeDefault
+      ? "pxpipe"
+      : defaultAgentLauncher;
 
   return (
     <SettingsSection title={gt("Agent launcher")}>
       <SettingsRow
         title={gt("Launcher")}
-        description={gt(
-          "Choose how this provider starts. Gemini CLI and Antigravity use pxpipe by default; the pxpipe proxy must be running.",
-        )}
+        description={
+          modelRoutedDefault
+            ? gt("Antigravity uses pxpipe for Google models and Bili for other models by default.")
+            : gt(
+                "Choose how this provider starts. Gemini CLI uses pxpipe by default; the pxpipe proxy must be running.",
+              )
+        }
         control={
           <Select
             value={instance.agentLauncher ?? (pxpipeDefault ? "pxpipe" : "default")}
@@ -54,7 +64,7 @@ export function ProviderInstanceLauncherSection({
               } else if (
                 value === "native" ||
                 (value === "bili" && biliCompatible) ||
-                (value === "pxpipe" && pxpipeDefault)
+                (value === "pxpipe" && canSelectPxpipe)
               ) {
                 onUpdate({ ...instance, agentLauncher: value });
               }
@@ -83,7 +93,7 @@ export function ProviderInstanceLauncherSection({
                   <T>Billion Context (bili)</T>
                 </SelectItem>
               ) : null}
-              {pxpipeDefault ? (
+              {canSelectPxpipe ? (
                 <SelectItem hideIndicator value="pxpipe">
                   <T>pxpipe</T>
                 </SelectItem>

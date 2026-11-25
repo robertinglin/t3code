@@ -4,6 +4,7 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type ServerProvider,
 } from "@t3tools/contracts";
+import { isGoogleModel } from "@t3tools/contracts/pxpipe";
 import { BILI_AGENT_COMPATIBILITY, biliAgentIdForDriver } from "@t3tools/contracts/settings";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -105,15 +106,30 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
             });
             return Effect.succeed({
               ...adapter,
+              planSelectionTransition: (input) => {
+                if (
+                  instance.agentLauncher === "model-aware" &&
+                  isGoogleModel(input.current.model) !== isGoogleModel(input.target.model)
+                ) {
+                  return Effect.succeed({ type: "restart_session" as const });
+                }
+                return adapter.planSelectionTransition(input);
+              },
               openSession: (input) => {
                 const open = Effect.gen(function* () {
                   const launcherSettings = yield* serverSettings.getSettings.pipe(
                     Effect.map((settings) => settings.agentLauncher),
                     Effect.orDie,
                   );
+                  const instanceLauncher =
+                    instance.agentLauncher === "model-aware"
+                      ? isGoogleModel(input.modelSelection.model)
+                        ? "pxpipe"
+                        : "bili"
+                      : instance.agentLauncher;
                   const effectiveLauncherSettings = {
                     ...launcherSettings,
-                    launcher: instance.agentLauncher ?? launcherSettings.launcher,
+                    launcher: instanceLauncher ?? launcherSettings.launcher,
                   };
                   if (
                     effectiveLauncherSettings.launcher === "bili" &&
