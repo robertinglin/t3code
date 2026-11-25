@@ -11,6 +11,7 @@ import {
   type CovenGateVote,
   type CovenStartBuilderInput,
   type CovenStartBuilderResult,
+  type CovenTaskStatus,
   type OrchestrationV2DomainEvent,
   type ThreadCovenState,
   type ThreadId,
@@ -137,6 +138,14 @@ export class CovenControlService extends Context.Service<
     readonly completeRun: (
       input: CovenCompletion,
     ) => Effect.Effect<CovenCompletionResult, CovenError>;
+    /** Leader only: ends an open task and stops its agent, freeing its worker slot. */
+    readonly cancelTask: (
+      leaderThreadId: ThreadId,
+      taskId: string,
+    ) => Effect.Effect<
+      { readonly taskId: string; readonly cancelled: boolean; readonly status: CovenTaskStatus },
+      CovenError
+    >;
     readonly reportToLeader: (
       workerThreadId: ThreadId,
       message: string,
@@ -165,6 +174,8 @@ const asCovenError = (message: string) => (cause: unknown) =>
   });
 
 const MEMORY_EXCERPT_CHARS = 4000;
+/** How long a task's agent may sit idle with no outcome before the coven frees its slot. */
+const IDLE_AGENT_GRACE_MS = 3 * 60_000;
 const decodeModelSelection = Schema.decodeUnknownEffect(ModelSelection);
 
 const candidateSelection = (candidate: CovenCandidate) =>
@@ -1461,6 +1472,82 @@ const make = Effect.gen(function* () {
     );
   });
 
+  /**
+   * Ends a running task whose agent stopped without finishing it — the user stopped it, the
+   * leader cancelled it, or it went idle without reporting — so its worker slot frees up and the
+   * leader can re-delegate. Returns the task title, or null when the task wasn't running.
+   */
+  const settleStoppedTask = Effect.fn("settleStoppedTask")(function* (
+    run: CovenRunRecord,
+    taskId: string,
+    message: string,
+  ) {
+    const now = yield* nowIso;
+    return yield* covens.updateRun(run.id, (record) =>
+      Effect.sync(() => {
+        const current = record.state.tasks.find((task) => task.id === taskId);
+        if (current === undefined || !ACTIVE_TASK_STATUSES.has(current.status)) {
+          return { state: record.state, result: null };
+        }
+        return {
+          state: replaceTask(record.state, taskId, (task) => ({
+            ...replaceLatestAttempt(task, (latest) => ({
+              ...latest,
+              status: "cancelled",
+              failureClass: null,
+              failureMessage: message,
+              endedAt: now,
+            })),
+            status: "cancelled",
+            updatedAt: now,
+          })),
+          events: [event("task.cancelled", `${current.title}: ${message}`)],
+          result: current.title,
+        };
+      }),
+    );
+  });
+
+  const stoppedTaskNote = (title: string, childThreadId: ThreadId | null, why: string) =>
+    `${why} "${title}" is cancelled and its worker slot is free. ${
+      childThreadId ? `Read thread ${childThreadId} for anything it got done, then ` : ""
+    }delegate the rest again with coven_delegate_role, or do it yourself.`;
+
+  const onChildStopped = Effect.fn("onChildStopped")(function* (
+    childThreadId: ThreadId,
+    requestedAtMs: number,
+  ) {
+    const link = yield* covens.childLink(childThreadId);
+    if (link === null) return;
+    const run = yield* covens.getRun(link.runId);
+    if (run === null || !isRunActive(run.state.status) || run.state.status === "paused") return;
+    const task = run.state.tasks.find((candidate) => candidate.id === link.taskId);
+    const attempt = task?.attempts.at(-1);
+    if (task?.status !== "running" || attempt === undefined) return;
+    // A stop from before this attempt began belongs to an earlier attempt.
+    if (requestedAtMs < Date.parse(attempt.startedAt)) return;
+    const title = yield* settleStoppedTask(run, task.id, "Stopped before it finished.");
+    if (title === null) return;
+    yield* notifyLeader(
+      run,
+      stoppedTaskNote(title, childThreadId, "The user stopped the agent on"),
+    );
+  });
+
+  const cancelTask: CovenControlService["Service"]["cancelTask"] = Effect.fn("cancelTask")(
+    function* (leaderThreadId, taskId) {
+      const run = yield* activeRunFor(leaderThreadId);
+      const task = run.state.tasks.find((candidate) => candidate.id === taskId);
+      if (task === undefined) {
+        return yield* policyDenied(`This coven run has no task ${taskId}.`);
+      }
+      const title = yield* settleStoppedTask(run, taskId, "Cancelled by the leader.");
+      if (title === null) return { taskId, cancelled: false, status: task.status };
+      if (task.childThreadId) yield* interrupt(task.childThreadId, "Coven task cancelled");
+      return { taskId, cancelled: true, status: "cancelled" as const };
+    },
+  );
+
   const onEvent = Effect.fn("onEvent")(
     function* (domainEvent: OrchestrationV2DomainEvent) {
       if (domainEvent.type === "subagent.updated") {
@@ -1481,6 +1568,14 @@ const make = Effect.gen(function* () {
       }
       if (domainEvent.type !== "run.updated") return;
       const providerRun = domainEvent.payload;
+      if (providerRun.status === "interrupted" || providerRun.status === "cancelled") {
+        if (!(yield* markOnce(`run:${providerRun.id}:stopped`))) return;
+        yield* onChildStopped(
+          providerRun.threadId,
+          DateTime.toEpochMillis(providerRun.requestedAt),
+        );
+        return;
+      }
       if (providerRun.status !== "completed" && providerRun.status !== "failed") return;
       const link = yield* covens.childLink(providerRun.threadId);
       if (link !== null) {
@@ -1508,6 +1603,25 @@ const make = Effect.gen(function* () {
    * clock starts with the run's current attempt, or the user's last resume if that is later.
    * The agent hears how long it has left shortly before the cap, and is stopped at it.
    */
+  /**
+   * A task's agent has gone quiet when its thread has no run in progress and its last run ended
+   * after this attempt began, a few minutes ago. The coven then never heard an outcome — the run
+   * event was missed, or it ended in a way no handler settles — and the task would hold its
+   * worker slot forever.
+   */
+  const agentWentIdle = (childThreadId: ThreadId, attemptStartedMs: number, nowMs: number) =>
+    threads.getThreadShell(childThreadId).pipe(
+      Effect.map((shell) => {
+        if (shell === null || shell.activeRunId !== null || shell.latestRunId === null)
+          return false;
+        const endedAt = shell.latestRunCompletedAt;
+        if (endedAt === null || endedAt === undefined) return false;
+        const endedMs = DateTime.toEpochMillis(endedAt);
+        return endedMs >= attemptStartedMs && nowMs - endedMs >= IDLE_AGENT_GRACE_MS;
+      }),
+      Effect.orElseSucceed(() => false),
+    );
+
   const sweepRuntime = Effect.gen(function* () {
     const nowMs = Date.parse(yield* nowIso);
     for (const run of yield* covens.activeRuns) {
@@ -1525,6 +1639,20 @@ const make = Effect.gen(function* () {
           run.state.resumedAt === undefined ? 0 : Date.parse(run.state.resumedAt),
         );
         const elapsedMinutes = (nowMs - since) / 60_000;
+        if (yield* agentWentIdle(task.childThreadId, Date.parse(attempt.startedAt), nowMs)) {
+          const title = yield* settleStoppedTask(
+            run,
+            task.id,
+            "Its agent stopped without finishing.",
+          );
+          if (title !== null) {
+            yield* notifyLeader(
+              run,
+              stoppedTaskNote(title, task.childThreadId, "The agent stopped without reporting on"),
+            );
+          }
+          continue;
+        }
         if (elapsedMinutes >= limitMinutes) {
           yield* stopOverdueTask(run, task.id, attempt.id, task.childThreadId, limitMinutes);
           continue;
@@ -1684,6 +1812,7 @@ const make = Effect.gen(function* () {
     requestGate,
     submitVote,
     completeRun,
+    cancelTask,
     reportToLeader,
     memoryExcerpt,
     candidateHeadroom,

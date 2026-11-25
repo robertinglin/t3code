@@ -222,6 +222,25 @@ const CovenSubmitVoteTool = Tool.make("coven_gate_submit_vote", {
   .annotate(Tool.Destructive, false)
   .annotate(Tool.OpenWorld, false);
 
+const CovenCancelTaskTool = Tool.make("coven_cancel_task", {
+  description:
+    "Coven leader only: cancel an open task by its taskId and stop its agent, which frees its worker slot. Use it for a task that is stuck or no longer needed.",
+  parameters: Schema.Struct({ taskId: Schema.String }),
+  success: Schema.Struct({
+    taskId: Schema.String,
+    cancelled: Schema.Boolean,
+    status: Schema.String,
+  }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies,
+})
+  .annotate(Tool.Title, "Cancel a coven task")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
 const CovenCompleteRunTool = Tool.make("coven_complete_run", {
   description:
     "Coven leader only: mark the current piece of work done. T3 checks that no task is open and every completion gate that applies has passed. The coven stays on the thread for the next request.",
@@ -328,6 +347,7 @@ export const CovenToolkit = Toolkit.make(
   threadTool(CovenRecordDecisionTool),
   threadTool(CovenRequestGateTool),
   threadTool(CovenSubmitVoteTool),
+  threadTool(CovenCancelTaskTool),
   threadTool(CovenCompleteRunTool),
   threadTool(CovenReportToLeaderTool),
   threadTool(CovenBuilderReadDraftTool),

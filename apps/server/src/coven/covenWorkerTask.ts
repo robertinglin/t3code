@@ -61,7 +61,7 @@ export function covenLeaderNote(input: {
       : `This thread runs the coven "${input.binding.name}" (revision ${input.binding.revision}). You are its leader.`,
     workers === ""
       ? "It has no worker roles, so do the work yourself."
-      : `Worker roles: ${workers}. Hand work to them with coven_delegate_role; call coven_capabilities for the mission and limits, and coven_task_status for progress. Generic delegation tools and your own built-in subagents are turned off here, so don't start subagents yourself.`,
+      : `Worker roles: ${workers}. Hand work to them with coven_delegate_role; call coven_capabilities for the mission and limits, coven_task_status for progress, and coven_cancel_task to cancel a stuck or unneeded task and free its slot. Generic delegation tools and your own built-in subagents are turned off here, so don't start subagents yourself.`,
     ...rotationLines,
     headroomRoles.length > 0
       ? `${headroomRoles.map((role) => role.id).join(", ")} ${headroomRoles.length === 1 ? "picks" : "pick"} whichever of its models has the most usage limit left when you delegate.`

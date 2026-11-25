@@ -497,6 +497,15 @@ const makeHandlers = (
       }),
     ),
 
+    coven_cancel_task: McpToolAccess.actsAsCaller((input) =>
+      Effect.gen(function* () {
+        const { control, leaderThreadId } = yield* leaderScope;
+        return yield* control
+          .cancelTask(leaderThreadId, input.taskId)
+          .pipe(Effect.mapError(toMcpFailure));
+      }),
+    ),
+
     coven_complete_run: McpToolAccess.actsAsCaller((input) =>
       Effect.gen(function* () {
         const { control, leaderThreadId } = yield* leaderScope;

@@ -144,4 +144,5 @@ directory instead.
 - With the `hybrid` workspace policy, only one worker writes in the shared checkout at a time;
   others get their own worktree. `isolated-worktrees` gives every worker a worktree.
 - The coven itself has no time limit. `maxRuntimeMinutes` (default 240) caps each delegated agent run on its own; time doesn't add up across agents. Twenty minutes before the cap the agent is told how long it has left; at the cap it is stopped and the leader decides what to do next. Resuming a paused coven restarts every running agent's clock.
+- If you stop an agent's run yourself, its task is cancelled and the leader is told, so the worker slot frees up and the leader can hand the work out again or finish it. A task whose agent goes quiet without reporting is freed the same way after a few minutes. The leader can also cancel a stuck task itself with `coven_cancel_task`.
 - Saving creates a new revision. A running run keeps the revision it started with.
