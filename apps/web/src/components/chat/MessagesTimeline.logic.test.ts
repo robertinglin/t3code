@@ -3170,7 +3170,7 @@ describe("v2 run and attempt history", () => {
       "live-activity-row",
     ]);
   });
-  it("keeps output from a superseded V2 attempt inline within the active logical run", () => {
+  it("collapses only output from a superseded V2 attempt within the active logical run", () => {
     const runId = "run-steered" as never;
     const supersededAttemptId = "attempt-1" as never;
     const activeAttemptId = "attempt-2" as never;
@@ -3307,15 +3307,83 @@ describe("v2 run and attempt history", () => {
       supportsConversationRollback: false,
     };
 
-    expect(deriveMessagesTimelineRows(common).map((row) => row.id)).toEqual([
+    const collapsedRows = deriveMessagesTimelineRows(common);
+    expect(collapsedRows.map((row) => row.id)).toEqual([
       "context-handoff-entry",
       "initial-user-entry",
+      `attempt-fold:${supersededAttemptId}`,
+      "superseded-thread-created-entry",
+      "steer-user-entry",
+      "active-assistant-entry",
+    ]);
+    expect(collapsedRows.find((row) => row.kind === "attempt-fold")).toMatchObject({
+      attemptId: supersededAttemptId,
+      runId,
+      label: "Superseded attempt",
+      expanded: false,
+      deferredWorkItemIds: ["old-work-anchor"],
+    });
+
+    const expandedRows = deriveMessagesTimelineRows({
+      ...common,
+      expandedAttemptIds: new Set([supersededAttemptId]),
+    });
+    expect(expandedRows.map((row) => row.id)).toEqual([
+      "context-handoff-entry",
+      "initial-user-entry",
+      `attempt-fold:${supersededAttemptId}`,
       "superseded-assistant-entry",
       "superseded-work-entry",
       "superseded-thread-created-entry",
       "steer-user-entry",
       "active-assistant-entry",
     ]);
+    const settledRows = deriveMessagesTimelineRows({
+      ...common,
+      latestRun: { ...common.latestRun, status: "completed", completedAt: "2026-01-01T00:00:08Z" },
+      timelineEntries: timelineEntries.map((entry) =>
+        entry.kind === "message" && entry.id === "active-assistant-entry"
+          ? { ...entry, message: { ...entry.message, streaming: false } }
+          : entry,
+      ),
+      expandedRunIds: new Set([runId]),
+    });
+    expect(settledRows.find((row) => row.kind === "attempt-fold")).toMatchObject({
+      deferredWorkItemIds: ["old-work-anchor"],
+    });
+    expect(
+      settledRows
+        .filter((row) => row.kind === "turn-fold")
+        .flatMap((row) => row.deferredWorkItemIds ?? []),
+    ).not.toContain("old-work-anchor");
+    const deferredTailRows = deriveMessagesTimelineRows({
+      ...common,
+      timelineEntries: [
+        timelineEntries[0]!,
+        timelineEntries[2]!,
+        timelineEntries[1]!,
+        ...timelineEntries.slice(3),
+      ].map((entry) => ({
+        ...entry,
+        attempt:
+          entry.attempt.id === supersededAttemptId
+            ? { ...entry.attempt, completedAt: DateTime.makeUnsafe("2026-01-01T00:00:08Z") }
+            : entry.attempt,
+        ...(entry.id === "superseded-assistant-entry"
+          ? {
+              projectedItem: {
+                item: {
+                  type: "assistant_message",
+                  ordinal: 2,
+                  status: "completed",
+                  completedAt: DateTime.makeUnsafe("2026-01-01T00:00:03Z"),
+                },
+              } as never,
+            }
+          : {}),
+      })),
+    });
+    expect(deferredTailRows.some((row) => row.kind === "attempt-fold")).toBe(true);
   });
 
   describe("a steer that supersedes an attempt", () => {
@@ -3445,8 +3513,7 @@ describe("v2 run and attempt history", () => {
         for (const runStatus of ["running", "completed"] as const) {
           for (const visibility of ["showAll", "zen"] as const) {
             const rows = rowsFor(completedSecond, runStatus, visibility, phase);
-            const unfolded = runStatus === "running" && visibility === "showAll";
-            expect(rows.some((row) => row.id === "old-reply-entry")).toBe(retained || unfolded);
+            expect(rows.some((row) => row.id === "old-reply-entry")).toBe(retained);
             if (phase !== undefined && runStatus === "completed") {
               const nativeRows = rowsFor(completedSecond, runStatus, visibility, phase, true);
               expect(nativeRows.some((row) => row.id === "old-reply-entry")).toBe(retained);
@@ -4665,7 +4732,9 @@ describe("failed turn transcript", () => {
         turnDiffSummaries: [],
         supportsConversationRollback: false,
       });
-      expect(rows.some((row) => row.kind === "turn-fold")).toBe(false);
+      expect(rows.some((row) => row.kind === "turn-fold" || row.kind === "attempt-fold")).toBe(
+        false,
+      );
       const work = rows.flatMap((row) => (row.kind === "work" ? row.groupedEntries : []));
       expect(rows.find((row) => row.kind === "work-toggle")).toEqual(
         isLatest ? expect.objectContaining({ hiddenCount: 3, expanded: false }) : undefined,
@@ -4875,7 +4944,7 @@ describe("live subagents after their parent turn settles", () => {
       turnDiffSummaries: [],
       supportsConversationRollback: false,
     });
-    expect(rows.map((row) => row.id)).toEqual(["command", "child"]);
+    expect(rows.map((row) => row.id)).toEqual([`attempt-fold:${attempt.id}`, "child"]);
   });
 });
 

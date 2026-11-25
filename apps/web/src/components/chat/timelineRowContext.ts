@@ -3,6 +3,7 @@ import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import type {
   ProviderApprovalDecision,
   ResponseContextRecord,
+  RunAttemptId,
   RuntimeRequestId,
   WorktreeSetupSnapshot,
 } from "@t3tools/contracts";
@@ -94,6 +95,7 @@ export interface TimelineRowSharedState {
     | ((input: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => Promise<void>)
     | undefined;
   onToggleTurnFold: (runId: RunId) => void;
+  onToggleAttemptFold: (attemptId: RunAttemptId) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   onFileDownload: (attachment: ChatFileAttachment) => void;
   openPullRequest: (event: MouseEvent<HTMLElement>, url: string) => void;

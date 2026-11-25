@@ -1,4 +1,4 @@
-import type { MessageId, RunId } from "@t3tools/contracts";
+import type { MessageId, RunAttemptId, RunId } from "@t3tools/contracts";
 
 export interface TimelineRunObservation {
   readonly threadKey: string | null;
@@ -119,6 +119,7 @@ export interface RememberedTimelinePosition {
   readonly disclosures?: {
     readonly runs: ReadonlySet<RunId>;
     readonly workGroups: ReadonlySet<string>;
+    readonly attempts: ReadonlySet<RunAttemptId>;
     readonly workGroupState: {
       scrollPositions: Map<string, { readonly entryId: string; readonly offset: number }>;
       expandedEntries: Set<string>;
